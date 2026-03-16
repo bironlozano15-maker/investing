@@ -59,17 +59,13 @@ import pandas as pd
 import sqlalchemy as sql
 from const import *
 from datetime import datetime
+from define import *
 
 kk = ['uid', 'hotkey']
 kb = [*kk, 'block']
 kn = [*kk, 'netuid']
 cd = os.path.dirname(os.path.realpath(__file__))
 an = 2
-
-db_path = r'db\daily.db'
-BASE_BLOCK = 7610333
-BASE_TIME_STR = '2026-02-24 00:00:03'
-BLOCK_SECONDS = 12
 
 def datetime_to_blocks(close_time) -> int:
     base_dt = datetime.strptime(BASE_TIME_STR, '%Y-%m-%d %H:%M:%S')
