@@ -133,6 +133,9 @@ def calculate_flow_time(db, close_time):
     db_hour = db[db['time'].between(start_time, close_time, inclusive="neither")].copy()
     df = db_hour[db_hour['netuid'] != 0]
 
+    if df.empty:
+        return [0.0] * 128
+
     # Sort so "first" is well-defined (important!)
     df = df.sort_values(['netuid', 'time'])
     alpha_in_start = df.groupby('netuid')['alpha_in'].first().values
