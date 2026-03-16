@@ -22,12 +22,8 @@ def generate_strat(start_time):
     new_row = pd.DataFrame([[uid, hotkey, start_time.date(), start_time.time(), 
                            datetime_to_blocks(start_time), 1000, strat_string]], 
                           columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
-    
-    try:
-        df = pd.read_csv(PATH)
-        new_row.to_csv(PATH, index=False)
-    except FileNotFoundError:
-        new_row.to_csv(PATH, index=False)
+                              
+    new_row.to_csv(PATH, index=False)
 
 def test():
     start_time = [
