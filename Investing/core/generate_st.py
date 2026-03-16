@@ -65,8 +65,8 @@ def test():
 
 def live():
     while True:
-        if datetime.now().hour == 13 and datetime.now().minute == 5:
-            generate_strat(datetime.now())
+        if datetime.utcnow().hour == 13 and datetime.utcnow().minute == 5:
+            generate_strat(datetime.utcnow())
             time.sleep(300)
         else:
             time.sleep(30)
