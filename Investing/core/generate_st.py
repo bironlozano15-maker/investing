@@ -6,16 +6,7 @@ import pandas as pd
 import os
 import time
 from data_load import fetch_alpha_prices, append_rows_to_csv
-
-an = 2
-hotkey = "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"
-uid = 2
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PATH = '../strat/{}.csv'.format(hotkey)
-
-BASE_BLOCK = 7718400
-BASE_TIME_STR = '2026-03-11 01:00:00'
-BLOCK_SECONDS = 12
+from define import *
 
 def datetime_to_blocks(close_time) -> int:
     base_dt = datetime.strptime(BASE_TIME_STR, '%Y-%m-%d %H:%M:%S')
@@ -50,7 +41,7 @@ def test():
     for i, (s_time, e_time) in enumerate(zip(start_time, end_time)):
         generate_strat(s_time)
         csv, fund, end, clip, win = (
-            os.path.join(SCRIPT_DIR, '..', 'strat', '{}.csv'.format(hotkey)),
+            os.path.join(SCRIPT_DIR, '..', strat_direct, '{}.csv'.format(hotkey)),
             1000,
             e_time,
             2,
@@ -87,8 +78,8 @@ def live():
 def fetch_data():
     while True:
         rows = fetch_alpha_prices()
-        append_rows_to_csv(rows, "data.csv")
+        append_rows_to_csv(rows, data_name)
         print(f"Fetched new data at", datetime.now(timezone.utc).replace(microsecond=0))
         time.sleep(300)
 
-if __name__ == "__main__": live(), fetch_data()
+if __name__ == "__main__": test()

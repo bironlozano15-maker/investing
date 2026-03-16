@@ -1,16 +1,10 @@
 import argparse
 import csv
 import json
-import time
-from decimal import Decimal
 from datetime import datetime, timezone
 from pathlib import Path
-
 import requests
-
-
-SOURCE_URL = "https://taostats.io/subnets"
-RAO_PER_UNIT = Decimal("1000000000")
+from define import *
 
 def convert_raw_amount(raw_value):
     if raw_value in (None, ""):
