@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime
 import pandas as pd
 import numpy as np
+from define import *
 
 def normalize_minmax(arr):
     arr = np.array(arr, dtype=float)
@@ -205,7 +206,7 @@ def calculate_ema_time(db, close_time):
     return dist
 
 def calculate_division(close_time):
-    db = pd.read_csv('data.csv')
+    db = pd.read_csv(data_name)
     db = pd.DataFrame(db)
     remove_index = calculate_index_time(db, close_time)
     flow_signal_1h = calculate_flow_time(db, close_time)

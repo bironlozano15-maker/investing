@@ -12,6 +12,7 @@ def rev(ss58):
     bt.logging.info(f'Submitting strategy {ss58}...')
     strat = open(f'{cd}/../strat/{ss58}').read()
     data = {'ss58': ss58, 'strat': strat}
+
     try: r = requests.post(f'{API_ROOT}/rev', json=data)
     except Exception as e:
         bt.logging.error(e)

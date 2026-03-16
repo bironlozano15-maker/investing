@@ -57,9 +57,9 @@ import json, requests
 import numpy as np
 import pandas as pd
 import sqlalchemy as sql
-from const import *
+from Investing.core.const import *
 from datetime import datetime
-from define import *
+from Investing.core.define import *
 
 kk = ['uid', 'hotkey']
 kb = [*kk, 'block']

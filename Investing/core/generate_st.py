@@ -19,11 +19,14 @@ def generate_strat(start_time):
     strat_dict = {k: v for k, v in strat_dict.items() if v != 0}
     strat_string = str(strat_dict)
     
-    new_row = pd.DataFrame([[uid, hotkey, start_time.date(), start_time.time(), 
-                           datetime_to_blocks(start_time), 1000, strat_string]], 
-                          columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
+    with open(STRATEGY_PATH, 'w') as file:
+        file.write(strat_string)
+
+    # new_row = pd.DataFrame([[uid, hotkey, start_time.date(), start_time.time(), 
+    #                        datetime_to_blocks(start_time), 1000, strat_string]], 
+    #                       columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
                               
-    new_row.to_csv(PATH, index=False)
+    # new_row.to_csv(STRATEGY_PATH, index=False)
 
 def test():
     start_time = [
@@ -37,7 +40,7 @@ def test():
     for i, (s_time, e_time) in enumerate(zip(start_time, end_time)):
         generate_strat(s_time)
         csv, fund, end, clip, win = (
-            os.path.join(SCRIPT_DIR, '..', strat_direct, '{}.csv'.format(hotkey)),
+            os.path.join(STRATEGY_PATH),
             1000,
             e_time,
             2,
@@ -63,19 +66,8 @@ def test():
         print(f'clip outlier days: {sim.clip_outliers}, rolling window days: {sim.win_size}')
         print(sim.sc2pct().to_string(index=False))
 
-def live():
-    while True:
-        if datetime.utcnow().hour == 13 and datetime.utcnow().minute == 5:
-            generate_strat(datetime.utcnow())
-            time.sleep(300)
-        else:
-            time.sleep(30)
-
 def fetch_data():
-    while True:
-        rows = fetch_alpha_prices()
-        append_rows_to_csv(rows, data_name)
-        print(f"Fetched new data at", datetime.now(timezone.utc).replace(microsecond=0))
-        time.sleep(300)
+    rows = fetch_alpha_prices()
+    append_rows_to_csv(rows, data_name)
 
 if __name__ == "__main__": test()
