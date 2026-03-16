@@ -8,8 +8,10 @@ import time
 from data_load import fetch_alpha_prices, append_rows_to_csv
 
 an = 2
-PATH = r'../strat/5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3.csv'
+hotkey = "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"
+uid = 2
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PATH = '../strat/{}.csv'.format(hotkey)
 
 BASE_BLOCK = 7718400
 BASE_TIME_STR = '2026-03-11 01:00:00'
@@ -25,26 +27,30 @@ def generate_strat(start_time):
     strat_dict = {n: float(strat[n-1]) for n in range(1, 129)}
     strat_dict = {k: v for k, v in strat_dict.items() if v != 0}
     strat_string = str(strat_dict)
-    df = pd.read_csv(PATH)
-    df['strat'] = strat_string
-    df['date'] = start_time.date()
-    df['time'] = start_time.time()
-    df['block'] = datetime_to_blocks(start_time)
-    df.to_csv(PATH, index=False)
+    
+    new_row = pd.DataFrame([[uid, hotkey, start_time.date(), start_time.time(), 
+                           datetime_to_blocks(start_time), 1000, strat_string]], 
+                          columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
+    
+    try:
+        df = pd.read_csv(PATH)
+        new_row.to_csv(PATH, index=False)
+    except FileNotFoundError:
+        new_row.to_csv(PATH, index=False)
 
 def test():
     start_time = [
-        datetime(2026, 3, 16, 13, 5, 0),
+        datetime(2026, 3, 13, 13, 5, 0),
     ]
 
     end_time = [
-        datetime(2026, 3, 17, 13, 5, 0),
+        datetime(2026, 3, 14, 13, 5, 0),
     ]
 
     for i, (s_time, e_time) in enumerate(zip(start_time, end_time)):
         generate_strat(s_time)
         csv, fund, end, clip, win = (
-            os.path.join(SCRIPT_DIR, '..', 'strat', '5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3.csv'),
+            os.path.join(SCRIPT_DIR, '..', 'strat', '{}.csv'.format(hotkey)),
             1000,
             e_time,
             2,
@@ -79,9 +85,10 @@ def live():
             time.sleep(30)
 
 def fetch_data():
-    rows = fetch_alpha_prices()
-    append_rows_to_csv(rows, "data.csv")
-    print(f"Fetched new data at", datetime.now(timezone.utc).replace(microsecond=0))
-    time.sleep(300)
+    while True:
+        rows = fetch_alpha_prices()
+        append_rows_to_csv(rows, "data.csv")
+        print(f"Fetched new data at", datetime.now(timezone.utc).replace(microsecond=0))
+        time.sleep(300)
 
 if __name__ == "__main__": live(), fetch_data()
