@@ -4,7 +4,6 @@ from division import calculate_division
 from const import *
 import pandas as pd
 import os
-import time
 from data_load import fetch_alpha_prices, append_rows_to_csv
 from define import *
 
@@ -22,11 +21,7 @@ def generate_strat(start_time):
     with open(STRATEGY_PATH, 'w') as file:
         file.write(strat_string)
 
-    # new_row = pd.DataFrame([[uid, hotkey, start_time.date(), start_time.time(), 
-    #                        datetime_to_blocks(start_time), 1000, strat_string]], 
-    #                       columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
-                              
-    # new_row.to_csv(STRATEGY_PATH, index=False)
+    return strat_string
 
 def test():
     start_time = [
@@ -38,9 +33,15 @@ def test():
     ]
 
     for i, (s_time, e_time) in enumerate(zip(start_time, end_time)):
-        generate_strat(s_time)
+        strat = generate_strat(s_time)
+        new_row = pd.DataFrame([[uid, hotkey, s_time.date(), s_time.time(), 
+                        datetime_to_blocks(s_time), 1000, strat]], 
+                        columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
+                              
+        new_row.to_csv(STRATEGY_PATH_CSV, index=False)
+
         csv, fund, end, clip, win = (
-            os.path.join(STRATEGY_PATH),
+            os.path.join(STRATEGY_PATH_CSV),
             1000,
             e_time,
             2,
@@ -65,6 +66,7 @@ def test():
         if not len(sim.sc): return
         print(f'clip outlier days: {sim.clip_outliers}, rolling window days: {sim.win_size}')
         print(sim.sc2pct().to_string(index=False))
+        os.remove(STRATEGY_PATH_CSV)
 
 def fetch_data():
     rows = fetch_alpha_prices()
