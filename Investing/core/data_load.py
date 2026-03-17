@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 import requests
-from define import *
+from Investing.core.define import *
 
 def convert_raw_amount(raw_value):
     if raw_value in (None, ""):
