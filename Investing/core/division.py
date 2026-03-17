@@ -1,8 +1,6 @@
-import sqlite3
-from datetime import datetime
 import pandas as pd
 import numpy as np
-from define import *
+from Investing.core.define import *
 
 def normalize_minmax(arr):
     arr = np.array(arr, dtype=float)
