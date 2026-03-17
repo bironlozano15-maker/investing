@@ -86,6 +86,13 @@ def custom_score_transform(score):
         if current_idx < non_zero_count:
             tier4_indices = sorted_indices[current_idx:]
             score[tier4_indices] = 0.09 / (non_zero_count - current_idx)
+
+        total_sum = np.sum(score[non_zero_mask])
+        if total_sum != 1.0 and non_zero_count > 0:
+            # Get the last non-zero index (smallest score)
+            last_non_zero = sorted_indices[-1]
+            # Adjust it to make the total sum exactly 1
+            score[last_non_zero] += (1.0 - total_sum)
     
     return score
 
