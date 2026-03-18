@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import math
 from Investing.core.define import *
 
 def normalize_minmax(arr):
@@ -85,13 +86,6 @@ def custom_score_transform(score):
             tier4_indices = sorted_indices[current_idx:]
             score[tier4_indices] = 0.09 / (non_zero_count - current_idx)
 
-        total_sum = np.sum(score[non_zero_mask])
-        if total_sum != 1.0 and non_zero_count > 0:
-            # Get the last non-zero index (smallest score)
-            last_non_zero = sorted_indices[-1]
-            # Adjust it to make the total sum exactly 1
-            score[last_non_zero] += (1.0 - total_sum)
-    
     return score
 
 def calculate_index_time(db, close_time):
@@ -236,5 +230,8 @@ def calculate_division(close_time):
         score.append(sc)
 
     strat = custom_score_transform(score)
+
+    # for i in range(len(strat)):
+    #     strat[i] = math.floor(strat[i] * 10**12) / 10**12
 
     return strat
