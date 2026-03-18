@@ -231,7 +231,7 @@ def calculate_division(close_time):
 
     strat = custom_score_transform(score)
 
-    # for i in range(len(strat)):
-    #     strat[i] = math.floor(strat[i] * 10**12) / 10**12
+    for i in range(len(strat)):
+        strat[i] = math.floor(strat[i] * 10**12) / 10**12
 
     return strat

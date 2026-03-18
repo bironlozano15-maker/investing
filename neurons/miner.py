@@ -166,18 +166,6 @@ class Miner(BaseMinerNeuron):
         )
         return priority
 
-    def save_state(self):
-        pass
-
-    def load_state(self):
-        pass
-
-    def set_weights(self):
-        pass
-
-    def forward_validator(self):
-        pass
-
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
     bt.logging.enable_info()
