@@ -12,32 +12,30 @@ def datetime_to_blocks(close_time) -> int:
 
 def test():
     start_time = [
-        datetime(2026, 3, 17, 0, 0, 0),
+        datetime(2026, 3, 2, 7, 3, 0),
     ]
 
     end_time = [
-        datetime(2026, 3, 18, 0, 0, 0),
+        datetime(2026, 3, 9, 7, 0, 0),
     ]
 
-    strategy_time = [
-        (datetime(2026, 3, 16, 13, 5, 0), datetime(2026, 3, 17, 13, 5, 0)),
+    strategy_times = [
+        (datetime(2026, 3, 2, 7, 0, 0)),
     ]
 
-    for i, (s_time, e_time, strategy_time) in enumerate(zip(start_time, end_time, strategy_time)):
-        fund = 1000
-        for i in range(len(strategy_time)):
-            strat = generate_strat(strategy_time[i])
-            start = max(s_time, strategy_time[i])
-            if start == e_time:
-                continue
+    for s_time, e_time in zip(start_time, end_time):
+        fund = 10000000
+        for i, strat_time in enumerate(strategy_times):
+            strat = generate_strat(strat_time)
+            start = max(s_time, strat_time)
             new_row = pd.DataFrame([[uid, hotkey, start.date(), start.time(), 
-                            datetime_to_blocks(start), 1000, strat]], 
+                            datetime_to_blocks(start), 10000000, strat]], 
                             columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
                                 
             new_row.to_csv(STRATEGY_PATH_CSV, index=False)
 
-            if start == s_time:
-                end = strategy_time[i] + pd.Timedelta(days=1)
+            if i + 1 < len(strategy_times):
+                end = min(strategy_times[i+1], e_time)
             else:
                 end = e_time
             csv, fund, end, clip, win = (

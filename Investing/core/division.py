@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
-import math
 from Investing.core.define import *
+import sqlite3
+import json
+import math
 
 def normalize_minmax(arr):
     arr = np.array(arr, dtype=float)
@@ -204,34 +206,269 @@ def calculate_ema_time(db, close_time):
 
     return dist
 
-def calculate_division(close_time):
-    db = pd.read_csv(data_name)
-    db = pd.DataFrame(db)
-    remove_index = calculate_index_time(db, close_time)
-    flow_signal_1h = calculate_flow_time(db, close_time)
-    flow_signal_3h = calculate_flow_times(db, close_time, delta = 3)
-    flow_signal_24h = calculate_flow_times(db, close_time, delta = 24)
-    dist = calculate_ema_time(db, close_time)
+def load_data():
+    conn = sqlite3.connect(r'Investing\core\db\daily1.db')
+    conn.row_factory = sqlite3.Row
 
-    for i in remove_index:
-        flow_signal_1h[i - 1] = 0
-        flow_signal_3h[i - 1] = 0
-        flow_signal_24h[i - 1] = 0
-        dist[i - 1] = 0
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM bndaily")
 
-    flow_signal_1h = normalize_minmax(flow_signal_1h)
-    flow_signal_3h = normalize_minmax(flow_signal_3h)
-    flow_signal_24h = normalize_minmax(flow_signal_24h)
-    dist = normalize_minmax(dist)
+    rows = cursor.fetchall()
+    conn.close()
 
-    score = []
-    for i in range(len(flow_signal_1h)):
-        sc = 0.4 * flow_signal_3h[i] + 0.3 * flow_signal_1h[i] + 0.2 * flow_signal_24h[i] + 0.1 * dist[i] 
-        score.append(sc)
+    # Reorganize data: column_name -> list of all values in that column
+    db = {}
+    if rows:
+        # Get all column names
+        columns = rows[0].keys()
+        
+        # For each column, collect all values
+        for col in columns:
+            db[col] = [row[col] for row in rows]
 
-    strat = custom_score_transform(score)
+    return db
 
-    for i in range(len(strat)):
-        strat[i] = math.floor(strat[i] * 10**12) / 10**12
+def calculate_ma_day(db, close_time, delta):
+    db = db[db['date'] != '0000-00-00'].copy()
+    db['date'] = pd.to_datetime(db['date'], errors='coerce')
+    db = db.dropna(subset=['date'])
 
+    # --- filter range once ---
+    start_time = close_time - pd.Timedelta(days=delta)
+
+    mask = (
+        (db['date'].dt.date > start_time.date()) &
+        (db['date'].dt.date < close_time.date()) &
+        (db['ochl'] == 'day')
+    )
+
+    db = db.loc[mask]
+
+    if db.empty:
+        return 0
+
+    db_transformed = db[['date', 'netuid', 'open', 'close']].copy()
+    db_transformed = db_transformed[['date', 'netuid', 'open']]
+
+    db_transformed = db_transformed.sort_values(['netuid', 'date'])
+    # Group by netuid
+    grouped = db_transformed.groupby('netuid')
+
+    ma_day_results = []
+
+    for netuid, group in grouped:
+        # Sort by date just to be sure
+        group = group.sort_values('date')
+        
+        # Get the open prices
+        prices = group['open'].values
+
+        ma_day_results.append({
+            'netuid': netuid,
+            'open': prices.mean()
+        })
+    
+    # Convert to DataFrame
+    ma_day_df = pd.DataFrame(ma_day_results)
+
+    return ma_day_df
+
+def calculate_ma(db, close_time):
+    db = db[db['date'] != '0000-00-00'].copy()
+    db['date'] = pd.to_datetime(db['date'], errors='coerce')
+    db = db.dropna(subset=['date'])
+
+    target_day = (close_time - pd.Timedelta(days=3)).date()
+    db = db[(db['date'].dt.date == target_day) & (db['ochl'] == 'day')]
+
+    if db.empty:
+        return 0
+
+    # --- compute mid price vectorized ---
+    db_transformed = db[['date', 'netuid', 'open', 'close']].copy()
+    db_transformed['open'] = (db_transformed['open'] + db_transformed['close']) / 2
+    db_transformed = db_transformed[['date', 'netuid', 'open']]
+
+    return db_transformed
+
+def calculate_rsi(db, close_time):
+    db = db[db['date'] != '0000-00-00'].copy()
+    db['date'] = pd.to_datetime(db['date'], errors='coerce')
+    db = db.dropna(subset=['date'])
+
+    # --- filter range once ---
+    start_time = close_time - pd.Timedelta(days=25)
+
+    mask = (
+        (db['date'].dt.date > start_time.date()) &
+        (db['date'].dt.date < close_time.date()) &
+        (db['ochl'] == 'day')
+    )
+
+    db = db.loc[mask]
+
+    if db.empty:
+        return 0
+    
+    db_transformed = db[['date', 'netuid', 'open', 'close']].copy()
+    db_transformed['open'] = (db_transformed['open'] + db_transformed['close']) / 2
+    db_transformed = db_transformed[['date', 'netuid', 'open']]
+
+    result = (db_transformed
+          .sort_values(['netuid', 'date'])  # Sort by netuid then date
+          .groupby('netuid')                 # Group by netuid
+          .tail(14)                          # Keep last 14 per group
+          .reset_index(drop=True))    
+
+    rsi_results = []
+    
+    # Group by netuid
+    for netuid, group in result.groupby('netuid'):
+        # Sort by date just to be sure
+        group = group.sort_values('date')
+        
+        # Get the open prices
+        prices = group['open'].values
+        
+        # Need at least 14 prices for RSI
+        if len(prices) < 14:
+            continue
+            
+        # Calculate price differences
+        differences = []
+        for i in range(1, len(prices)):
+            differences.append(prices[i] - prices[i-1])
+        
+        # Take only the last 13 differences (for 14-period RSI)
+        differences = differences[-13:]
+        
+        # Calculate average gain and loss
+        gains = [d for d in differences if d > 0]
+        losses = [abs(d) for d in differences if d < 0]
+        
+        avg_gain = sum(gains) / 13 if gains else 0
+        avg_loss = sum(losses) / 13 if losses else 0
+        
+        # Calculate RSI
+        if avg_loss == 0:
+            rsi = 100.0
+        else:
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+        
+        # Store result
+        rsi_results.append({
+            'netuid': netuid,
+            'rsi': round(rsi, 2)
+        })
+    
+    # Convert to DataFrame
+    rsi_df = pd.DataFrame(rsi_results)
+    return rsi_df
+
+def filter_by_netuid(ma_current_netuid, df):
+    # Extract valid tickers from Series (skip header row)
+    valid = set(
+        ma_current_netuid.iloc[1:]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+    
+    # Clean df
+    df = df.copy()
+    df['netuid'] = df['netuid'].astype(str).str.strip().str.upper()
+    
+    # Filter
+    return df[df['netuid'].isin(valid)]
+
+def calculate_strat(investing_long, investing_short):
+    strat = {'_': 1}
+    
+    # Avoid division by zero
+    long_n = len(investing_long)
+    short_n = len(investing_short)
+    
+    long_weight = 0.3 / (long_n + 1) if long_n >= 0 else 0
+    short_weight = 0.7 / (short_n + 1) if short_n >= 0 else 0
+    
+    # Assign long weights
+    for stock in investing_long:
+        strat[stock] = long_weight
+    
+    # Assign short weights
+    for stock in investing_short:
+        strat[stock] = short_weight
+    
     return strat
+    
+def calculate_division(close_time):
+    asset = 1
+    if asset == 1:
+        db = load_data()
+        db = pd.DataFrame(db)
+        ma200 = calculate_ma_day(db, close_time, 200)
+        ma50 = calculate_ma_day(db, close_time, 50)
+        ma_current = calculate_ma(db, close_time)
+        rsi = calculate_rsi(db, close_time)
+        ma_current = ma_current[(ma_current['open'] >= 50) & (ma_current['open'] <= 300)]
+        ma_current_netuid = ma_current['netuid']
+        
+        stock_names = []
+        for i in range(len(ma_current_netuid)):
+            stock_name = ma_current_netuid.iloc[i]
+            if (ma_current[ma_current['netuid'] == stock_name]['open'].iloc[0] >= ma200[ma200['netuid'] == stock_name]['open'].iloc[0] and
+                    ma50[ma50['netuid'] == stock_name]['open'].iloc[0] >= ma200[ma200['netuid'] == stock_name]['open'].iloc[0]):
+                stock_names.append(stock_name)
+
+        investing_long = []
+        investing_short = []
+        for stock in stock_names:
+            # Get RSI value for this stock
+            rsi_value = rsi.loc[rsi['netuid'] == stock, 'rsi'].iloc[0]
+            
+            if rsi_value <= 20:
+                investing_long.append(stock)
+            elif 60 <= rsi_value < 70:
+                investing_short.append(stock)
+            else:
+                continue
+        
+        strat = calculate_strat(investing_long, investing_short)
+        strat_string = json.dumps(strat)
+    else:
+        db = pd.read_csv(data_name)
+        db = pd.DataFrame(db)
+        remove_index = calculate_index_time(db, close_time)
+        flow_signal_1h = calculate_flow_time(db, close_time)
+        flow_signal_3h = calculate_flow_times(db, close_time, delta = 3)
+        flow_signal_24h = calculate_flow_times(db, close_time, delta = 24)
+        dist = calculate_ema_time(db, close_time)
+
+        for i in remove_index:
+            flow_signal_1h[i - 1] = 0
+            flow_signal_3h[i - 1] = 0
+            flow_signal_24h[i - 1] = 0
+            dist[i - 1] = 0
+
+        flow_signal_1h = normalize_minmax(flow_signal_1h)
+        flow_signal_3h = normalize_minmax(flow_signal_3h)
+        flow_signal_24h = normalize_minmax(flow_signal_24h)
+        dist = normalize_minmax(dist)
+
+        score = []
+        for i in range(len(flow_signal_1h)):
+            sc = 0.4 * flow_signal_3h[i] + 0.3 * flow_signal_1h[i] + 0.2 * flow_signal_24h[i] + 0.1 * dist[i] 
+            score.append(sc)
+
+        strat = custom_score_transform(score)
+
+        for i in range(len(strat)):
+            strat[i] = math.floor(strat[i] * 10**12) / 10**12
+
+        strat_dict = {n: float(strat[n-1]) for n in range(1, len(strat) + 1)}
+        strat_dict = {k: v for k, v in strat_dict.items() if v != 0}
+
+        strat_string = str(strat_dict)
+        
+    return strat_string
