@@ -1,6 +1,6 @@
 import tempfile
 
-FIRST_DATE = '2025-03-20'
+FIRST_DATE = '2026-01-10'
 API_ROOT = 'http://api.investing88.ai'
 RAWGIT_ROOT = 'https://raw.githubusercontent.com/mobiusfund/investing'
 
