@@ -228,57 +228,21 @@ def load_data():
 
     return db
 
-def calculate_ma_day(db, close_time, delta):
-    db = db[db['date'] != '0000-00-00'].copy()
-    db['date'] = pd.to_datetime(db['date'], errors='coerce')
-    db = db.dropna(subset=['date'])
-
-    # --- filter range once ---
-    start_time = close_time - pd.Timedelta(days=delta)
-
-    mask = (
-        (db['date'].dt.date > start_time.date()) &
-        (db['date'].dt.date < close_time.date()) &
-        (db['ochl'] == 'day')
-    )
-
-    db = db.loc[mask]
-
-    if db.empty:
-        return 0
-
-    db_transformed = db[['date', 'netuid', 'open', 'close']].copy()
-    db_transformed = db_transformed[['date', 'netuid', 'open']]
-
-    db_transformed = db_transformed.sort_values(['netuid', 'date'])
-    # Group by netuid
-    grouped = db_transformed.groupby('netuid')
-
-    ma_day_results = []
-
-    for netuid, group in grouped:
-        # Sort by date just to be sure
-        group = group.sort_values('date')
-        
-        # Get the open prices
-        prices = group['open'].values
-
-        ma_day_results.append({
-            'netuid': netuid,
-            'open': prices.mean()
-        })
-    
-    # Convert to DataFrame
-    ma_day_df = pd.DataFrame(ma_day_results)
-
-    return ma_day_df
-
 def calculate_ma(db, close_time):
     db = db[db['date'] != '0000-00-00'].copy()
     db['date'] = pd.to_datetime(db['date'], errors='coerce')
     db = db.dropna(subset=['date'])
 
-    target_day = (close_time - pd.Timedelta(days=3)).date()
+    if isinstance(close_time, tuple):
+        close_time = close_time[0]  # Extract the datetime
+    else:
+        close_time = close_time
+
+    if close_time.weekday() == 0:
+        delta = 3
+    else:
+        delta = 1
+    target_day = (close_time - pd.Timedelta(days=delta)).date()
     db = db[(db['date'].dt.date == target_day) & (db['ochl'] == 'day')]
 
     if db.empty:
@@ -295,6 +259,11 @@ def calculate_rsi(db, close_time):
     db = db[db['date'] != '0000-00-00'].copy()
     db['date'] = pd.to_datetime(db['date'], errors='coerce')
     db = db.dropna(subset=['date'])
+
+    if isinstance(close_time, tuple):
+        close_time = close_time[0]  # Extract the datetime
+    else:
+        close_time = close_time
 
     # --- filter range once ---
     start_time = close_time - pd.Timedelta(days=25)
@@ -320,7 +289,7 @@ def calculate_rsi(db, close_time):
           .tail(14)                          # Keep last 14 per group
           .reset_index(drop=True))    
 
-    rsi_results = []
+    rsi_results = {}
     
     # Group by netuid
     for netuid, group in result.groupby('netuid'):
@@ -357,87 +326,373 @@ def calculate_rsi(db, close_time):
             rsi = 100 - (100 / (1 + rs))
         
         # Store result
-        rsi_results.append({
-            'netuid': netuid,
-            'rsi': round(rsi, 2)
-        })
-    
-    # Convert to DataFrame
-    rsi_df = pd.DataFrame(rsi_results)
-    return rsi_df
+        rsi_results[netuid] = rsi
 
-def filter_by_netuid(ma_current_netuid, df):
-    # Extract valid tickers from Series (skip header row)
-    valid = set(
-        ma_current_netuid.iloc[1:]
-        .astype(str)
-        .str.strip()
-        .str.upper()
+    return rsi_results
+
+def calculate_ema_fast(db, close_time):
+    db = db[db['date'] != '0000-00-00'].copy()
+    db['date'] = pd.to_datetime(db['date'], errors='coerce')
+    db = db.dropna(subset=['date'])
+
+    if isinstance(close_time, tuple):
+        close_time = close_time[0]  # Extract the datetime
+    else:
+        close_time = close_time
+
+    # --- filter range once ---
+    start_time = close_time - pd.Timedelta(days=20)
+
+    mask = (
+        (db['date'].dt.date > start_time.date()) &
+        (db['date'].dt.date < close_time.date()) &
+        (db['ochl'] == 'day')
     )
-    
-    # Clean df
-    df = df.copy()
-    df['netuid'] = df['netuid'].astype(str).str.strip().str.upper()
-    
-    # Filter
-    return df[df['netuid'].isin(valid)]
 
-def calculate_strat(investing_long, investing_short):
-    strat = {'_': 1}
+    db = db.loc[mask]
+
+    if db.empty:
+        return 0
     
-    # Avoid division by zero
-    long_n = len(investing_long)
-    short_n = len(investing_short)
+    db_transformed = db[['date', 'netuid', 'open', 'close']].copy()
+    db_transformed = db_transformed[['date', 'netuid', 'close']]
+
+    result = (db_transformed
+          .sort_values(['netuid', 'date'])  # Sort by netuid then date
+          .groupby('netuid')                 # Group by netuid
+          .tail(11)                        
+          .reset_index(drop=True))    
     
-    long_weight = 0.3 / (long_n + 1) if long_n >= 0 else 0
-    short_weight = 0.7 / (short_n + 1) if short_n >= 0 else 0
+    alpha = 2 / (10 + 1)
+
+    ema_dict = {}
+
+    for netuid, group in result.groupby('netuid'):
+        group = group.sort_values('date')
+
+        closes = group['close'].values
+
+        # skip if not enough data
+        if len(closes) < 11:
+            continue
+
+        # Step 1: initial EMA = average of first 10 days
+        initial_avg = closes[:10].mean()
+
+        # Step 2: calculate EMA using 11th day
+        ema = (closes[10] * alpha) + (initial_avg * (1 - alpha))
+
+        ema_dict[netuid] = ema
+
+    return ema_dict
+
+def calculate_ema_slow(db, close_time):
+    db = db[db['date'] != '0000-00-00'].copy()
+    db['date'] = pd.to_datetime(db['date'], errors='coerce')
+    db = db.dropna(subset=['date'])
+
+    if isinstance(close_time, tuple):
+        close_time = close_time[0]  # Extract the datetime
+    else:
+        close_time = close_time
+
+    # --- filter range once ---
+    start_time = close_time - pd.Timedelta(days=50)
+
+    mask = (
+        (db['date'].dt.date > start_time.date()) &
+        (db['date'].dt.date < close_time.date()) &
+        (db['ochl'] == 'day')
+    )
+
+    db = db.loc[mask]
+
+    if db.empty:
+        return 0
     
-    # Assign long weights
-    for stock in investing_long:
-        strat[stock] = long_weight
+    db_transformed = db[['date', 'netuid', 'open', 'close']].copy()
+    db_transformed = db_transformed[['date', 'netuid', 'close']]
+
+    result = (db_transformed
+          .sort_values(['netuid', 'date'])  # Sort by netuid then date
+          .groupby('netuid')                 # Group by netuid
+          .tail(31)                       
+          .reset_index(drop=True))    
     
-    # Assign short weights
-    for stock in investing_short:
-        strat[stock] = short_weight
+    alpha = 2 / (30 + 1)
+
+    ema_dict = {}
+
+    for netuid, group in result.groupby('netuid'):
+        group = group.sort_values('date')
+
+        closes = group['close'].values
+
+        # skip if not enough data
+        if len(closes) < 31:
+            continue
+
+        # Step 1: initial EMA = average of first 10 days
+        initial_avg = closes[:30].mean()
+
+        # Step 2: calculate EMA using 11th day
+        ema = (closes[30] * alpha) + (initial_avg * (1 - alpha))
+
+        ema_dict[netuid] = ema
+
+    return ema_dict
+
+def calculate_volume(db, close_time):
+    db = db[db['date'] != '0000-00-00'].copy()
+    db['date'] = pd.to_datetime(db['date'], errors='coerce')
+    db = db.dropna(subset=['date'])
+
+    if isinstance(close_time, tuple):
+        close_time = close_time[0]  # Extract the datetime
+    else:
+        close_time = close_time
+
+    # --- filter range once ---
+    start_time = close_time - pd.Timedelta(days=36)
+
+    mask = (
+        (db['date'].dt.date > start_time.date()) &
+        (db['date'].dt.date < close_time.date()) &
+        (db['ochl'] == 'day')
+    )
+
+    db = db.loc[mask]
+
+    if db.empty:
+        return 0
     
-    return strat
+    db_transformed = db[['date', 'netuid', 'open', 'close', 'volume']].copy()
+    db_transformed = db_transformed[['date', 'netuid', 'volume']]
+
+    result = (db_transformed
+          .sort_values(['netuid', 'date'])  # Sort by netuid then date
+          .groupby('netuid')                 # Group by netuid
+          .tail(21)                       
+          .reset_index(drop=True))    
     
-def calculate_division(close_time):
-    asset = 1
+    volume_dict = {}
+    close_dict = {}
+
+    for netuid, group in result.groupby('netuid'):
+        group = group.sort_values('date')
+
+        volumes = group['volume'].values
+
+        # skip if not enough data
+        if len(volumes) < 21:
+            continue
+
+        # Step 1: initial EMA = average of first 20 days
+        avg = volumes[:20].mean()
+        close_volume = volumes[20]
+
+        volume_dict[netuid] = avg
+        close_dict[netuid] = close_volume
+
+    return volume_dict, close_dict
+
+def calculate_resistance(db, close_time):
+    db = db[db['date'] != '0000-00-00'].copy()
+    db['date'] = pd.to_datetime(db['date'], errors='coerce')
+    db = db.dropna(subset=['date'])
+
+    if isinstance(close_time, tuple):
+        close_time = close_time[0]  # Extract the datetime
+    else:
+        close_time = close_time
+
+    # --- filter range once ---
+    start_time = close_time - pd.Timedelta(days=36)
+
+    mask = (
+        (db['date'].dt.date > start_time.date()) &
+        (db['date'].dt.date < close_time.date()) &
+        (db['ochl'] == 'day')
+    )
+
+    db = db.loc[mask]
+
+    if db.empty:
+        return 0
+    
+    db_transformed = db[['date', 'netuid', 'open', 'close']].copy()
+    db_transformed = db_transformed[['date', 'netuid', 'close']]
+
+    result = (db_transformed
+          .sort_values(['netuid', 'date'])  # Sort by netuid then date
+          .groupby('netuid')                 # Group by netuid
+          .tail(21)                       
+          .reset_index(drop=True))    
+    
+    resistance_max_dict = {}
+    resistance_min_dict = {}
+    close_dict = {}
+
+    for netuid, group in result.groupby('netuid'):
+        group = group.sort_values('date')
+
+        closes = group['close'].values
+
+        # skip if not enough data
+        if len(closes) < 21:
+            continue
+
+        # Step 1: initial EMA = average of first 20 days
+        resistance_max = closes[:20].max()
+        resistance_min = closes[:20].min()
+        close_price = closes[20]
+
+        resistance_max_dict[netuid] = resistance_max
+        resistance_min_dict[netuid] = resistance_min
+        close_dict[netuid] = close_price
+
+    return resistance_max_dict, resistance_min_dict, close_dict
+
+def truncate_to_12(value):
+    if value >= 0:
+        return math.floor(value * 10**12) / 10**12
+    else:
+        return math.ceil(value * 10**12) / 10**12
+
+def custom_strat(investing):
+    result = {'_': 1}
+    
+    if not investing:
+        return result
+    
+    # Check if investing contains tuples (score, score_1) or just single scores
+    first_value = next(iter(investing.values()))
+    is_tuple = isinstance(first_value, tuple)
+    
+    if is_tuple:
+        # Handle dual scores (score and score_1)
+        score_stocks = []
+        score_1_stocks = []
+        
+        for netuid, (score, score_1) in investing.items():
+            score_stocks.append((netuid, score))
+            score_1_stocks.append((netuid, score_1))
+        
+        # Sort and assign positive weights
+        score_stocks.sort(key=lambda x: x[1], reverse=True)
+        positive_groups = [(28, 0.35), (13, 0.11), (13, 0.04)]
+        
+        start_idx = 0
+        for group_size, total_weight in positive_groups:
+            group_stocks = score_stocks[start_idx:start_idx + group_size]
+            if group_stocks:
+                weight_per_stock = total_weight / len(group_stocks)
+                # Truncate to 12 decimal places (no rounding)
+                weight_per_stock = truncate_to_12(weight_per_stock)
+                for stock, _ in group_stocks:
+                    result[stock] = weight_per_stock
+            start_idx += group_size
+        
+        # Sort and assign negative weights
+        score_1_stocks.sort(key=lambda x: x[1], reverse=True)
+        negative_groups = [(28, -0.35), (13, -0.11), (13, -0.04)]
+        
+        start_idx = 0
+        for group_size, total_weight in negative_groups:
+            group_stocks = score_1_stocks[start_idx:start_idx + group_size]
+            if group_stocks:
+                weight_per_stock = total_weight / len(group_stocks)
+                # Truncate to 12 decimal places (no rounding)
+                weight_per_stock = truncate_to_12(weight_per_stock)
+                for stock, _ in group_stocks:
+                    if stock in result:
+                        result[stock] = truncate_to_12(result[stock] + weight_per_stock)
+                    else:
+                        result[stock] = weight_per_stock
+            start_idx += group_size
+    
+    else:
+        # Handle single score values
+        score_stocks = [(netuid, score) for netuid, score in investing.items()]
+        score_stocks.sort(key=lambda x: x[1], reverse=True)
+        
+        # Groups: (number_of_stocks, total_weight)
+        groups = [(56, 0.7), (26, 0.22), (26, 0.08)]
+        
+        start_idx = 0
+        for group_size, total_weight in groups:
+            group_stocks = score_stocks[start_idx:start_idx + group_size]
+            if group_stocks:
+                weight_per_stock = total_weight / len(group_stocks)
+                # Truncate to 12 decimal places (no rounding)
+                weight_per_stock = truncate_to_12(weight_per_stock)
+                for stock, _ in group_stocks:
+                    result[stock] = weight_per_stock
+            start_idx += group_size
+    
+    return result
+    
+def calculate_division(close_time, asset):
+    if isinstance(close_time, tuple):
+        close_time = close_time[0]  # Extract the datetime
+    else:
+        close_time = close_time
+        
     if asset == 1:
         db = load_data()
         db = pd.DataFrame(db)
-        ma200 = calculate_ma_day(db, close_time, 200)
-        ma50 = calculate_ma_day(db, close_time, 50)
+
         ma_current = calculate_ma(db, close_time)
         rsi = calculate_rsi(db, close_time)
         ma_current = ma_current[(ma_current['open'] >= 50) & (ma_current['open'] <= 300)]
         ma_current_netuid = ma_current['netuid']
-        
-        stock_names = []
-        for i in range(len(ma_current_netuid)):
-            stock_name = ma_current_netuid.iloc[i]
-            if (ma_current[ma_current['netuid'] == stock_name]['open'].iloc[0] >= ma200[ma200['netuid'] == stock_name]['open'].iloc[0] and
-                    ma50[ma50['netuid'] == stock_name]['open'].iloc[0] >= ma200[ma200['netuid'] == stock_name]['open'].iloc[0]):
-                stock_names.append(stock_name)
+        ema_fast = calculate_ema_fast(db, close_time)
+        ema_slow = calculate_ema_slow(db, close_time)   
+        avg_volume, close_volume = calculate_volume(db, close_time)
+        resistance_max, resistance_min, close_price = calculate_resistance(db, close_time)
+        investing = {}
 
-        investing_long = []
-        investing_short = []
-        for stock in stock_names:
-            # Get RSI value for this stock
-            rsi_value = rsi.loc[rsi['netuid'] == stock, 'rsi'].iloc[0]
-            
-            if rsi_value <= 20:
-                investing_long.append(stock)
-            elif 60 <= rsi_value < 70:
-                investing_short.append(stock)
-            else:
+        for netuid in ma_current_netuid:
+            # --- make sure all data exists ---
+            if not all(netuid in d for d in [
+                ema_fast, ema_slow, rsi,
+                avg_volume, close_volume,
+                resistance_max, resistance_min
+            ]):
                 continue
-        
-        strat = calculate_strat(investing_long, investing_short)
+
+            # --- extract values ---
+            ef = float(ema_fast[netuid])
+            es = float(ema_slow[netuid])
+            r = float(rsi[netuid])
+            cv = float(close_volume[netuid])
+            av = float(avg_volume[netuid])
+            cp = float(close_price[netuid])
+            res_max = float(resistance_max[netuid])
+            res_min = float(resistance_min[netuid])
+
+            if r == 0:
+                continue
+
+            ema_score = (ef - es) / es
+            rsi_score = (r - 60) / 60
+            volume_score = (cv - av) / cv
+            price_score = (cp - res_max) / res_max
+            score = 0.2 * ema_score + 0.3 * rsi_score + 0.2 * volume_score + 0.3 * price_score
+
+            ema_score_1 = (es - ef) / ef
+            rsi_score_1 = (35 - r) / r
+            price_score_1 = (res_min - cp) / cp
+            score_1 = 0.2 * ema_score_1 + 0.3 * rsi_score_1 + 0.2 * volume_score + 0.3 * price_score_1
+            if close_time.weekday() == 0:
+                investing[netuid] = score
+            else:
+                investing[netuid] = score, score_1
+
+        strat = custom_strat(investing)
         strat_string = json.dumps(strat)
     else:
-        db = pd.read_csv(data_name)
+        db = pd.read_csv(DATA_NAME)
         db = pd.DataFrame(db)
         remove_index = calculate_index_time(db, close_time)
         flow_signal_1h = calculate_flow_time(db, close_time)
