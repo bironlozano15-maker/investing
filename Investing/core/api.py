@@ -18,7 +18,7 @@ def rev(ss58):
         bt.logging.error(e)
         return
     if r.status_code <= 201:
-        os.utime(f'{cd}/../strat/.last-update')
+        os.utime(f'{cd}/../strat/.last-update-{ss58}')
     btlog(r)
 
 def pnl():
