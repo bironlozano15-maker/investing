@@ -58,7 +58,7 @@ def generate_strat(start_time, asset):
             file.write(strat)
     else:
         with open(STOCKS_STRATEGY_PATH, 'w') as file:
-            file.write(strat)
+            file.write(str(strat))
 
     return strat
 

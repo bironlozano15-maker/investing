@@ -35,8 +35,9 @@ def test():
         uid = STOCKS_UID
         save_directory = STOCKS_STRATEGY_PATH_CSV
 
-    for s_time, e_time in zip(start_time, end_time):
-        for i, strat_time in enumerate(strategy_times):
+    for s_time, e_time, strat_times in zip(start_time, end_time, strategy_times):
+        strat_times = strat_times if isinstance(strat_times, (list, tuple)) else [strat_times]
+        for i, strat_time in enumerate(strat_times):
             strat = generate_strat(strat_time, ASSET)
             if isinstance(strat_time, tuple):
                 strat_time = strat_time[0]
@@ -47,8 +48,8 @@ def test():
                                 
             new_row.to_csv(save_directory, index=False)
 
-            if i + 1 < len(strategy_times):
-                end = min(strategy_times[i+1], e_time)
+            if i + 1 < len(strat_times):
+                end = min(strat_times[i+1], e_time)
             else:
                 end = e_time
             csv, fund, end, clip, win = (

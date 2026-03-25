@@ -233,11 +233,6 @@ def calculate_ma(db, close_time):
     db['date'] = pd.to_datetime(db['date'], errors='coerce')
     db = db.dropna(subset=['date'])
 
-    if isinstance(close_time, tuple):
-        close_time = close_time[0]  # Extract the datetime
-    else:
-        close_time = close_time
-
     if close_time.weekday() == 0:
         delta = 3
     else:
@@ -259,11 +254,6 @@ def calculate_rsi(db, close_time):
     db = db[db['date'] != '0000-00-00'].copy()
     db['date'] = pd.to_datetime(db['date'], errors='coerce')
     db = db.dropna(subset=['date'])
-
-    if isinstance(close_time, tuple):
-        close_time = close_time[0]  # Extract the datetime
-    else:
-        close_time = close_time
 
     # --- filter range once ---
     start_time = close_time - pd.Timedelta(days=25)
@@ -335,11 +325,6 @@ def calculate_ema_fast(db, close_time):
     db['date'] = pd.to_datetime(db['date'], errors='coerce')
     db = db.dropna(subset=['date'])
 
-    if isinstance(close_time, tuple):
-        close_time = close_time[0]  # Extract the datetime
-    else:
-        close_time = close_time
-
     # --- filter range once ---
     start_time = close_time - pd.Timedelta(days=20)
 
@@ -390,11 +375,6 @@ def calculate_ema_slow(db, close_time):
     db = db[db['date'] != '0000-00-00'].copy()
     db['date'] = pd.to_datetime(db['date'], errors='coerce')
     db = db.dropna(subset=['date'])
-
-    if isinstance(close_time, tuple):
-        close_time = close_time[0]  # Extract the datetime
-    else:
-        close_time = close_time
 
     # --- filter range once ---
     start_time = close_time - pd.Timedelta(days=50)
@@ -447,11 +427,6 @@ def calculate_volume(db, close_time):
     db['date'] = pd.to_datetime(db['date'], errors='coerce')
     db = db.dropna(subset=['date'])
 
-    if isinstance(close_time, tuple):
-        close_time = close_time[0]  # Extract the datetime
-    else:
-        close_time = close_time
-
     # --- filter range once ---
     start_time = close_time - pd.Timedelta(days=36)
 
@@ -500,11 +475,6 @@ def calculate_resistance(db, close_time):
     db = db[db['date'] != '0000-00-00'].copy()
     db['date'] = pd.to_datetime(db['date'], errors='coerce')
     db = db.dropna(subset=['date'])
-
-    if isinstance(close_time, tuple):
-        close_time = close_time[0]  # Extract the datetime
-    else:
-        close_time = close_time
 
     # --- filter range once ---
     start_time = close_time - pd.Timedelta(days=36)
@@ -633,11 +603,6 @@ def custom_strat(investing):
     return result
     
 def calculate_division(close_time, asset):
-    if isinstance(close_time, tuple):
-        close_time = close_time[0]  # Extract the datetime
-    else:
-        close_time = close_time
-        
     if asset == 1:
         db = load_data()
         db = pd.DataFrame(db)
@@ -691,6 +656,7 @@ def calculate_division(close_time, asset):
 
         strat = custom_strat(investing)
         strat_string = json.dumps(strat)
+        strat_string = json.loads(strat_string)
     else:
         db = pd.read_csv(DATA_NAME)
         db = pd.DataFrame(db)
