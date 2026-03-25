@@ -51,7 +51,7 @@ def generate_strat(start_time, asset):
     if asset == 1:
         fetchdb(asset)
 
-    strat = calculate_division(asset)
+    strat = calculate_division(start_time, asset)
     
     if asset == 0:
         with open(STAKING_STRATEGY_PATH, 'w') as file:
