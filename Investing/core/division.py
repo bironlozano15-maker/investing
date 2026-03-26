@@ -207,7 +207,7 @@ def calculate_ema_time(db, close_time):
     return dist
 
 def load_data():
-    conn = sqlite3.connect(r'Investing\core\db\daily1.db')
+    conn = sqlite3.connect(r'Investing/core/db/daily1.db')
     conn.row_factory = sqlite3.Row
 
     cursor = conn.cursor()
