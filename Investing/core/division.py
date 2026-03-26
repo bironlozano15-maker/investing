@@ -608,6 +608,11 @@ def calculate_division(close_time, asset):
         db = pd.DataFrame(db)
 
         ma_current = calculate_ma(db, close_time)
+
+        if ma_current is None or ma_current == 0:
+            print('Notice: Historical data is not enough. strategy was not generated.')
+            return None
+
         rsi = calculate_rsi(db, close_time)
         ma_current = ma_current[(ma_current['open'] >= 50) & (ma_current['open'] <= 300)]
         ma_current_netuid = ma_current['netuid']
