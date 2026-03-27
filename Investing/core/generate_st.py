@@ -47,13 +47,11 @@ def fetchdb(asset):
         fd.append(df)
     return fd
 
-def generate_strat(start_time, asset):
+def generate_strat(start_time, asset, flag):
     if asset == 1:
         fetchdb(asset)
 
-    strat = calculate_division(start_time, asset)
-    if strat is None:
-        return None
+    strat = calculate_division(start_time, asset, flag)
     
     if asset == 0:
         with open(STAKING_STRATEGY_PATH, 'w') as file:
@@ -61,6 +59,7 @@ def generate_strat(start_time, asset):
     else:
         with open(STOCKS_STRATEGY_PATH, 'w') as file:
             file.write(str(strat))
+        os.remove(data_directory)
 
     return strat
 

@@ -4,6 +4,7 @@ import pandas as pd
 from Investing.core.define import *
 from Investing.core.generate_st import generate_strat
 from Investing.core.simst import SimSt
+from Investing.core.thread_strat import calculate_flag
 
 
 def datetime_to_blocks(close_time) -> int:
@@ -13,15 +14,15 @@ def datetime_to_blocks(close_time) -> int:
 
 def test():
     start_time = [
-        datetime(2026, 3, 23, 7, 30, 0),
+        datetime(2026, 3, 26, 7, 30, 0),
     ]
 
     end_time = [
-        datetime(2026, 3, 24, 7, 30, 0), 
+        datetime(2026, 3, 27, 7, 30, 0), 
     ]
 
     strategy_times = [
-        (datetime(2026, 3, 23, 7, 30, 0)),
+        (datetime(2026, 3, 26, 7, 30, 0)),
     ]
 
     if ASSET == 0:
@@ -38,7 +39,10 @@ def test():
     for s_time, e_time, strat_times in zip(start_time, end_time, strategy_times):
         strat_times = strat_times if isinstance(strat_times, (list, tuple)) else [strat_times]
         for i, strat_time in enumerate(strat_times):
-            strat = generate_strat(strat_time, ASSET)
+            db = pd.read_csv(DATA_NAME)
+            db = pd.DataFrame(db)
+            flag = calculate_flag(db, strat_time)
+            strat = generate_strat(strat_time, ASSET, flag)
             if isinstance(strat_time, tuple):
                 strat_time = strat_time[0]
             start = max(s_time, strat_time)

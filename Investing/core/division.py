@@ -4,6 +4,7 @@ from Investing.core.define import *
 import sqlite3
 import json
 import math
+import datetime
 
 def normalize_minmax(arr):
     arr = np.array(arr, dtype=float)
@@ -30,65 +31,75 @@ def normalize_minmax(arr):
     
     return arr
 
-def custom_score_transform(score):
-    score = np.array(score, dtype=float)
-    
-    # Mask for non-zero values
-    non_zero_mask = score != 0
-    non_zero_indices = np.where(non_zero_mask)[0]
-    
-    # Get the number of non-zero values
-    non_zero_count = len(non_zero_indices)
-    
-    if non_zero_count > 0:
-        # Sort non-zero indices by their corresponding scores in descending order
-        sorted_indices = non_zero_indices[np.argsort(score[non_zero_indices])[::-1]]
+def custom_score_transform(score, flag):
+    if flag == 0:
+        score = np.array(score, dtype=float)
         
-        # Calculate counts for each tier based on percentages of non-zero values
-        tier1_count = int(non_zero_count * 0.435)  # Largest 43.5%
-        tier2_count = int(non_zero_count * 0.13)   # Next largest 13%
-        tier3_count = int(non_zero_count * 0.22)   # Next largest 22%
+        # Mask for non-zero values
+        non_zero_mask = score != 0
+        non_zero_indices = np.where(non_zero_mask)[0]
         
-        # The remaining values get the last tier
-        # Ensure we don't exceed the total count due to rounding
-        total_assigned = tier1_count + tier2_count + tier3_count
-        if total_assigned < non_zero_count:
-            tier4_count = non_zero_count - total_assigned
+        # Get the number of non-zero values
+        non_zero_count = len(non_zero_indices)
+        
+        if non_zero_count > 0:
+            # Sort non-zero indices by their corresponding scores in descending order
+            sorted_indices = non_zero_indices[np.argsort(score[non_zero_indices])[::-1]]
+            
+            # Calculate counts for each tier based on percentages of non-zero values
+            tier1_count = int(non_zero_count * 0.435)  # Largest 43.5%
+            tier2_count = int(non_zero_count * 0.13)   # Next largest 13%
+            tier3_count = int(non_zero_count * 0.22)   # Next largest 22%
+            
+            # The remaining values get the last tier
+            # Ensure we don't exceed the total count due to rounding
+            total_assigned = tier1_count + tier2_count + tier3_count
+            if total_assigned < non_zero_count:
+                tier4_count = non_zero_count - total_assigned
+            else:
+                # Adjust if rounding caused us to exceed
+                tier4_count = 0
+                # Recalculate to ensure exact distribution
+                tier1_count = int(non_zero_count * 0.435)
+                tier2_count = int(non_zero_count * 0.13)
+                tier3_count = non_zero_count - tier1_count - tier2_count
+            
+            # Assign values to each tier
+            current_idx = 0
+            
+            # Tier 1 (largest 43.5%)
+            if tier1_count > 0:
+                tier1_indices = sorted_indices[current_idx:current_idx + tier1_count]
+                score[tier1_indices] = 0.59 / tier1_count
+                current_idx += tier1_count
+            
+            # Tier 2 (next 13%)
+            if tier2_count > 0:
+                tier2_indices = sorted_indices[current_idx:current_idx + tier2_count]
+                score[tier2_indices] = 0.13 / tier2_count
+                current_idx += tier2_count
+            
+            # Tier 3 (next 22%)
+            if tier3_count > 0:
+                tier3_indices = sorted_indices[current_idx:current_idx + tier3_count]
+                score[tier3_indices] = 0.19 / tier3_count
+                current_idx += tier3_count
+            
+            # Tier 4 (remaining)
+            if current_idx < non_zero_count:
+                tier4_indices = sorted_indices[current_idx:]
+                score[tier4_indices] = 0.09 / (non_zero_count - current_idx)
+            
+        return score
+    else:
+        new_score = np.zeros_like(score)
+        if len(score) >= 10:
+            top_10_indices = np.argsort(score)[::-1][:10]
+            new_score[top_10_indices] = 0.005
         else:
-            # Adjust if rounding caused us to exceed
-            tier4_count = 0
-            # Recalculate to ensure exact distribution
-            tier1_count = int(non_zero_count * 0.435)
-            tier2_count = int(non_zero_count * 0.13)
-            tier3_count = non_zero_count - tier1_count - tier2_count
+            new_score[:] = 0.005
         
-        # Assign values to each tier
-        current_idx = 0
-        
-        # Tier 1 (largest 43.5%)
-        if tier1_count > 0:
-            tier1_indices = sorted_indices[current_idx:current_idx + tier1_count]
-            score[tier1_indices] = 0.59 / tier1_count
-            current_idx += tier1_count
-        
-        # Tier 2 (next 13%)
-        if tier2_count > 0:
-            tier2_indices = sorted_indices[current_idx:current_idx + tier2_count]
-            score[tier2_indices] = 0.13 / tier2_count
-            current_idx += tier2_count
-        
-        # Tier 3 (next 22%)
-        if tier3_count > 0:
-            tier3_indices = sorted_indices[current_idx:current_idx + tier3_count]
-            score[tier3_indices] = 0.19 / tier3_count
-            current_idx += tier3_count
-        
-        # Tier 4 (remaining)
-        if current_idx < non_zero_count:
-            tier4_indices = sorted_indices[current_idx:]
-            score[tier4_indices] = 0.09 / (non_zero_count - current_idx)
-
-    return score
+        return new_score
 
 def calculate_index_time(db, close_time):
     # Convert time column, handling bad data
@@ -188,7 +199,7 @@ def calculate_ema_time(db, close_time):
 
     # Sort so "first" is well-defined (important!)
     df = df.sort_values(['netuid', 'time'])
-    price_close = df.groupby('netuid')['price'].last().values
+    price_close = df.groupby('netuid')['alpha_price'].last().values
 
     pre_close_time = close_time - pd.Timedelta(hours=2)
     pre_start_time = start_time - pd.Timedelta(hours=2)
@@ -196,7 +207,7 @@ def calculate_ema_time(db, close_time):
     pre_db_24h = db[db['time'].between(pre_start_time, pre_close_time, inclusive="neither")].copy()
     pre_df = pre_db_24h[pre_db_24h['netuid'] != 0]
 
-    average_24h = pre_df.groupby('netuid')['price'].mean().values
+    average_24h = pre_df.groupby('netuid')['alpha_price'].mean().values
 
     dist = []
     for i in range(len(price_close)):
@@ -207,7 +218,7 @@ def calculate_ema_time(db, close_time):
     return dist
 
 def load_data():
-    conn = sqlite3.connect(r'Investing/core/db/daily1.db')
+    conn = sqlite3.connect(r'Investing\core\db\daily1.db')
     conn.row_factory = sqlite3.Row
 
     cursor = conn.cursor()
@@ -602,17 +613,12 @@ def custom_strat(investing):
     
     return result
     
-def calculate_division(close_time, asset):
+def calculate_division(close_time, asset, flag):
     if asset == 1:
         db = load_data()
         db = pd.DataFrame(db)
 
         ma_current = calculate_ma(db, close_time)
-
-        if ma_current is None or ma_current == 0:
-            print('Notice: Historical data is not enough. strategy was not generated.')
-            return None
-
         rsi = calculate_rsi(db, close_time)
         ma_current = ma_current[(ma_current['open'] >= 50) & (ma_current['open'] <= 300)]
         ma_current_netuid = ma_current['netuid']
@@ -687,7 +693,7 @@ def calculate_division(close_time, asset):
             sc = 0.4 * flow_signal_3h[i] + 0.3 * flow_signal_1h[i] + 0.2 * flow_signal_24h[i] + 0.1 * dist[i] 
             score.append(sc)
 
-        strat = custom_score_transform(score)
+        strat = custom_score_transform(score, flag)
 
         for i in range(len(strat)):
             strat[i] = math.floor(strat[i] * 10**12) / 10**12

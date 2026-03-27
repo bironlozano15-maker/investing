@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 SOURCE_URL = "https://taostats.io/subnets"
+TAO_PRICE_URL = "https://api.coingecko.com/api/v3/simple/price"
 RAO_PER_UNIT = Decimal("1000000000")
 
 AN = 2

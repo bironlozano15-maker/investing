@@ -70,6 +70,19 @@ def extract_subnet_payload(html: str) -> list[dict]:
     _, _, best_payload = max(candidates)
     return json.loads(best_payload)
 
+def fetch_live_tao_price() -> str:
+    response = requests.get(
+        TAO_PRICE_URL,
+        params={"ids": "bittensor", "vs_currencies": "usd"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    tao_price = payload.get("bittensor", {}).get("usd")
+    if tao_price in (None, ""):
+        raise RuntimeError("Could not fetch TAO price from CoinGecko.")
+
+    return str(tao_price)
 
 def fetch_alpha_prices() -> list[dict]:
     response = requests.get(
@@ -79,6 +92,7 @@ def fetch_alpha_prices() -> list[dict]:
     response.raise_for_status()
 
     subnets = extract_subnet_payload(response.text)
+    tao_price = fetch_live_tao_price()
     fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S+00:00")
 
     rows = []
@@ -105,7 +119,8 @@ def fetch_alpha_prices() -> list[dict]:
                 "netuid": netuid,
                 "alpha_in": convert_raw_amount(alpha_in_raw),
                 "tao_in": convert_raw_amount(tao_in_raw),
-                "price": subnet.get("price") or ""
+                "alpha_price": subnet.get("price") or "",
+                "tao_price": tao_price
             }
         )
 
