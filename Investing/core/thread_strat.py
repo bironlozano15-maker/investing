@@ -16,24 +16,24 @@ def calculate_flag(db, close_time):
     db = db.dropna(subset=['time'])
     
     if db.empty:
-        return []
+        return 0
     
     # Make close_time naive too
     close_time = pd.to_datetime(close_time).tz_localize(None)
-    start_time = close_time - pd.Timedelta(hours=12)
+    start_time = close_time - pd.Timedelta(hours=15)
     
     # Filter for the 30-minute window
     mask = (db['time'] > start_time) & (db['time'] < close_time)
     db_12h = db[mask].copy()
     
     if db_12h.empty:
-        return []
+        return 0
     
     # Remove netuid 0
     df = db_12h[db_12h['netuid'] != 0]
     
     if df.empty:
-        return []
+        return 0
     
     # Sort and get first alpha_in for each netuid
     df = df.sort_values(['netuid', 'time'])
@@ -51,7 +51,7 @@ def calculate_flag(db, close_time):
     min_tao_price = min_row['tao_price']
     min_time = min_row['time']
 
-    if max_tao_price - min_tao_price >= min_tao_price * 0.1 and max_time > min_time:
+    if max_tao_price - min_tao_price >= min_tao_price * 0.09 and max_time > min_time:
         flag = 1
     else:
         flag = 0
