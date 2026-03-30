@@ -83,10 +83,13 @@ def check_flag():
             time = current_time.replace(hour=13, minute=5, second=0, microsecond=0) - timedelta(days=1)
             generate_strat(time, 0, flag)
 
+    return flag
+
 if __name__ == "__main__":
     while True:
+        flag = 0
         try:
-            calculate_flag()
+            flag = check_flag()
         except Exception as e:
             time.sleep(1)  # Wait 1 second before retrying
 
@@ -94,7 +97,7 @@ if __name__ == "__main__":
             generate_strat(datetime.utcnow(), 0, flag)
             time.sleep(300)
         elif datetime.utcnow().hour == 7 and datetime.utcnow().minute == 30:
-            generate_strat(datetime.utcnow(), 1, flag)
+            generate_strat(datetime.utcnow(), 1, 0)
             time.sleep(300)
         else:
             time.sleep(30)
