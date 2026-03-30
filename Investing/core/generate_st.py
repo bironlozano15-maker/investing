@@ -7,6 +7,7 @@ import requests
 import time, json, os
 import sqlalchemy as sql
 from Investing.core.simst import cd
+from datetime import datetime, timezone, timedelta
 
 def fetchda(a):
     date = "2026-03-20"
@@ -59,7 +60,8 @@ def generate_strat(start_time, asset, flag):
     else:
         with open(STOCKS_STRATEGY_PATH, 'w') as file:
             file.write(str(strat))
-        os.remove(data_directory)
+
+    print("Generated new strategy at", datetime.now(timezone.utc).replace(microsecond=0), "asset=", asset, "flag =", flag)
 
     return strat
 

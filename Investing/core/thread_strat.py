@@ -58,56 +58,43 @@ def calculate_flag(db, close_time):
 
     return flag
 
+def check_flag():
+    db = pd.read_csv(DATA_NAME)
+    db = pd.DataFrame(db)
+    current_time = datetime.utcnow()
+    flag = calculate_flag(db, current_time)
+    with open(STAKING_STRATEGY_PATH, 'r') as file:
+        file_content = file.read()
+        # Convert string representation of dict to actual dict
+        last_strat = ast.literal_eval(file_content)
+    sum_values = sum(last_strat.values())
+    if flag == 1 and sum_values > 0.1:
+        if current_time.hour >= 13:
+            time = current_time.replace(hour=13, minute=5, second=0, microsecond=0)
+            generate_strat(time, 0, flag)
+        else:
+            time = time = current_time.replace(hour=13, minute=5, second=0, microsecond=0) - timedelta(days=1)
+            generate_strat(time, 0, flag)
+    elif flag == 0 and sum_values < 0.1:
+        if current_time.hour >= 13:
+            time = current_time.replace(hour=13, minute=5, second=0, microsecond=0)
+            generate_strat(time, 0, flag)
+        else:
+            time = current_time.replace(hour=13, minute=5, second=0, microsecond=0) - timedelta(days=1)
+            generate_strat(time, 0, flag)
+
 if __name__ == "__main__":
     while True:
-        db = pd.read_csv(DATA_NAME)
-        db = pd.DataFrame(db)
-        current_time = datetime.utcnow()
-        flag = calculate_flag(db, current_time)
-        with open(STAKING_STRATEGY_PATH, 'r') as file:
-            file_content = file.read()
-            # Convert string representation of dict to actual dict
-            last_strat = ast.literal_eval(file_content)
-        sum_values = sum(last_strat.values())
-        if flag == 1:
-            if 0 < sum_values <= 0.1:
-                time.sleep(30)
-                continue
-            else:
-                if current_time - lastupdate_time >= timedelta(hours=6):
-                    current_time = datetime.utcnow()
-                    if current_time.hour >= 13:
-                        time = current_time.replace(hour=13, minute=5, second=0, microsecond=0)
-                        generate_strat(time, 0, flag)
-                    else:
-                        time = time = current_time.replace(hour=13, minute=5, second=0, microsecond=0) - timedelta(days=1)
-                        generate_strat(time, 0, flag)
-                else:
-                    time.sleep(30)
-                    continue
-        else:
-            if 0.95 <= sum_values <= 1:
-                time.sleep(30)
-                continue
-            else:
-                if current_time - lastupdate_time >= timedelta(hours=6):
-                    if current_time.hour >= 13:
-                        time = current_time.replace(hour=13, minute=5, second=0, microsecond=0)
-                        generate_strat(time, 0, flag)
-                    else:
-                        time = current_time.replace(hour=13, minute=5, second=0, microsecond=0) - timedelta(days=1)
-                        generate_strat(time, 0, flag)
-                else:
-                    time.sleep(30)
-                    continue
-   
+        try:
+            calculate_flag()
+        except Exception as e:
+            time.sleep(1)  # Wait 1 second before retrying
+
         if datetime.utcnow().hour == 13 and datetime.utcnow().minute == 5:
             generate_strat(datetime.utcnow(), 0, flag)
-            print("Generated new staking strategy at", datetime.now(timezone.utc).replace(microsecond=0))
             time.sleep(300)
         elif datetime.utcnow().hour == 7 and datetime.utcnow().minute == 30:
             generate_strat(datetime.utcnow(), 1, flag)
-            print("Generated new stocks strategy at", datetime.now(timezone.utc).replace(microsecond=0))
             time.sleep(300)
         else:
             time.sleep(30)
