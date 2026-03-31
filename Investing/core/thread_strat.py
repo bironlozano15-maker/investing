@@ -73,7 +73,7 @@ def check_flag():
             time = current_time.replace(hour=13, minute=5, second=0, microsecond=0)
             generate_strat(time, 0, flag)
         else:
-            time = time = current_time.replace(hour=13, minute=5, second=0, microsecond=0) - timedelta(days=1)
+            time = current_time.replace(hour=13, minute=5, second=0, microsecond=0) - timedelta(days=1)
             generate_strat(time, 0, flag)
     elif flag == 0 and sum_values < 0.1:
         if current_time.hour >= 13:

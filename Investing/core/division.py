@@ -31,7 +31,7 @@ def normalize_minmax(arr):
     
     return arr
 
-def custom_score_transform(score, flag):
+def generate_staking_strat_by_score(score, flag):
     if flag == 0:
         score = np.array(score, dtype=float)
         
@@ -540,7 +540,7 @@ def truncate_to_12(value):
     else:
         return math.ceil(value * 10**12) / 10**12
 
-def custom_strat(investing):
+def generate_stocks_strat_by_score(investing):
     result = {'_': 1}
     
     if not investing:
@@ -622,6 +622,7 @@ def calculate_division(close_time, asset, flag):
         rsi = calculate_rsi(db, close_time)
         ma_current = ma_current[(ma_current['open'] >= 50) & (ma_current['open'] <= 300)]
         ma_current_netuid = ma_current['netuid']
+
         ema_fast = calculate_ema_fast(db, close_time)
         ema_slow = calculate_ema_slow(db, close_time)   
         avg_volume, close_volume = calculate_volume(db, close_time)
@@ -665,7 +666,7 @@ def calculate_division(close_time, asset, flag):
             else:
                 investing[netuid] = score, score_1
 
-        strat = custom_strat(investing)
+        strat = generate_stocks_strat_by_score(investing)
         strat_string = json.dumps(strat)
         strat_string = json.loads(strat_string)
     else:
@@ -693,7 +694,7 @@ def calculate_division(close_time, asset, flag):
             sc = 0.4 * flow_signal_3h[i] + 0.3 * flow_signal_1h[i] + 0.2 * flow_signal_24h[i] + 0.1 * dist[i] 
             score.append(sc)
 
-        strat = custom_score_transform(score, flag)
+        strat = generate_staking_strat_by_score(score, flag)
 
         for i in range(len(strat)):
             strat[i] = math.floor(strat[i] * 10**12) / 10**12
