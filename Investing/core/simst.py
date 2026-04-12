@@ -238,8 +238,6 @@ def pldaily(self, date, end, a=0):
         dn = dn[dn['block'] <= end_block]
     else:
         dn = dn
-    
-    dn.to_csv('output.csv', index=False)
 
     ba, fa = ba.set_index(kn).sort_index(), fa.set_index(kb).sort_index()
 
