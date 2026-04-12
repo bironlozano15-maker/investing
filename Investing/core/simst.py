@@ -230,12 +230,17 @@ def pldaily(self, date, end, a=0):
     bb = fa[kb].drop_duplicates().sort_values(kb)
     nn = pd.concat([ba[kn], fa[kn]]).drop_duplicates().sort_values(kn).reset_index()
     dn = pd.concat([bn[bn['date'] == date], rv[rv['date'] == date]])
-    if date_format.date() == start_date.date():
+    if date_format.date() == start_date.date() == end.date():
+        dn = dn[(dn['block'] >= start_block) & (dn['block'] <= end_block)]
+    elif date_format.date() == start_date.date():
         dn = dn[dn['block'] >= start_block]
     elif date_format.date() == end.date():
         dn = dn[dn['block'] <= end_block]
     else:
         dn = dn
+    
+    dn.to_csv('output.csv', index=False)
+
     ba, fa = ba.set_index(kn).sort_index(), fa.set_index(kb).sort_index()
 
     alpha0k = {}

@@ -1,6 +1,6 @@
 import tempfile
 
-FIRST_DATE = '2026-01-10'
+FIRST_DATE = '2026-01-01'
 API_ROOT = 'http://api.investing88.ai'
 RAWGIT_ROOT = 'https://raw.githubusercontent.com/mobiusfund/investing'
 
@@ -30,7 +30,7 @@ CLIP_OUTLIERS = 2
 CLIP_DEFAULT = 1
 
 RISK_INIT_DTAO = 5
-RISK_INIT_STK = 1
+RISK_INIT_STK = 5
 
 WIN_SIZE_DTAO = 30
 WIN_SIZE_STK = 30

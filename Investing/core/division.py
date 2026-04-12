@@ -4,221 +4,18 @@ from Investing.core.define import *
 import sqlite3
 import json
 import math
-import datetime
+from datetime import datetime
 
-def normalize_minmax(arr):
-    arr = np.array(arr, dtype=float)
-    
-    # Mask of non-zero values
-    non_zero_mask = arr != 0
-    
-    # If no non-zero values, return as-is
-    if not np.any(non_zero_mask):
-        return arr
-    
-    non_zero_vals = arr[non_zero_mask]
-    
-    min_val = np.min(non_zero_vals)
-    max_val = np.max(non_zero_vals)
-    
-    # Edge case: all non-zero values are equal
-    if max_val == min_val:
-        arr[non_zero_mask] = 1.0
-        return arr
-    
-    # Scale non-zero values to [0.5, 1]
-    arr[non_zero_mask] = 0.5 + 0.5 * (non_zero_vals - min_val) / (max_val - min_val)
-    
-    return arr
+def datetime_to_blocks(close_time) -> int:
+    base_dt = datetime.strptime(BASE_TIME_STR, '%Y-%m-%d %H:%M:%S')
+    delta_sec = (close_time - base_dt).total_seconds()
+    return int(BASE_BLOCK + delta_sec // BLOCK_SECONDS)
 
-def generate_staking_strat_by_score(score, flag):
-    if flag == 0:
-        score = np.array(score, dtype=float)
-        
-        # Mask for non-zero values
-        non_zero_mask = score != 0
-        non_zero_indices = np.where(non_zero_mask)[0]
-        
-        # Get the number of non-zero values
-        non_zero_count = len(non_zero_indices)
-        
-        if non_zero_count > 0:
-            # Sort non-zero indices by their corresponding scores in descending order
-            sorted_indices = non_zero_indices[np.argsort(score[non_zero_indices])[::-1]]
-            
-            # Calculate counts for each tier based on percentages of non-zero values
-            tier1_count = int(non_zero_count * 0.435)  # Largest 43.5%
-            tier2_count = int(non_zero_count * 0.13)   # Next largest 13%
-            tier3_count = int(non_zero_count * 0.22)   # Next largest 22%
-            
-            # The remaining values get the last tier
-            # Ensure we don't exceed the total count due to rounding
-            total_assigned = tier1_count + tier2_count + tier3_count
-            if total_assigned < non_zero_count:
-                tier4_count = non_zero_count - total_assigned
-            else:
-                # Adjust if rounding caused us to exceed
-                tier4_count = 0
-                # Recalculate to ensure exact distribution
-                tier1_count = int(non_zero_count * 0.435)
-                tier2_count = int(non_zero_count * 0.13)
-                tier3_count = non_zero_count - tier1_count - tier2_count
-            
-            # Assign values to each tier
-            current_idx = 0
-            
-            # Tier 1 (largest 43.5%)
-            if tier1_count > 0:
-                tier1_indices = sorted_indices[current_idx:current_idx + tier1_count]
-                score[tier1_indices] = 0.59 / tier1_count
-                current_idx += tier1_count
-            
-            # Tier 2 (next 13%)
-            if tier2_count > 0:
-                tier2_indices = sorted_indices[current_idx:current_idx + tier2_count]
-                score[tier2_indices] = 0.13 / tier2_count
-                current_idx += tier2_count
-            
-            # Tier 3 (next 22%)
-            if tier3_count > 0:
-                tier3_indices = sorted_indices[current_idx:current_idx + tier3_count]
-                score[tier3_indices] = 0.19 / tier3_count
-                current_idx += tier3_count
-            
-            # Tier 4 (remaining)
-            if current_idx < non_zero_count:
-                tier4_indices = sorted_indices[current_idx:]
-                score[tier4_indices] = 0.09 / (non_zero_count - current_idx)
-            
-        return score
+def load_data(asset):
+    if asset == 1:
+        conn = sqlite3.connect(r'Investing/core/db/daily1.db')
     else:
-        new_score = np.zeros_like(score)
-        if len(score) >= 10:
-            top_10_indices = np.argsort(score)[::-1][:10]
-            new_score[top_10_indices] = 0.005
-        else:
-            new_score[:] = 0.005
-        
-        return new_score
-
-def calculate_index_time(db, close_time):
-    # Convert time column, handling bad data
-    db['time'] = pd.to_datetime(db['time'], errors='coerce')
-    
-    # Remove timezone (convert to naive)
-    db['time'] = db['time'].dt.tz_localize(None)
-    
-    # Drop rows with invalid times
-    db = db.dropna(subset=['time'])
-    
-    if db.empty:
-        return []
-    
-    # Make close_time naive too
-    close_time = pd.to_datetime(close_time).tz_localize(None)
-    start_time = close_time - pd.Timedelta(hours=3)
-    
-    # Filter for the 30-minute window
-    mask = (db['time'] > start_time) & (db['time'] < close_time)
-    db_3h = db[mask].copy()
-    
-    if db_3h.empty:
-        return []
-    
-    # Remove netuid 0
-    df = db_3h[db_3h['netuid'] != 0]
-    
-    if df.empty:
-        return []
-    
-    # Sort and get first alpha_in for each netuid
-    df = df.sort_values(['netuid', 'time'])
-    alpha_in_start = df.groupby('netuid')['alpha_in'].first()
-    
-    # Get netuids where alpha_in < 150000
-    index = alpha_in_start[alpha_in_start < 150000].index.tolist()
-    
-    return index
-
-def calculate_flow_time(db, close_time):
-    start_time = close_time - pd.Timedelta(minutes=90)
-
-    db_hour = db[db['time'].between(start_time, close_time, inclusive="neither")].copy()
-    df = db_hour[db_hour['netuid'] != 0]
-
-    if df.empty:
-        return [0.0] * 128
-
-    # Sort so "first" is well-defined (important!)
-    df = df.sort_values(['netuid', 'time'])
-    alpha_in_start = df.groupby('netuid')['alpha_in'].first().values
-    alpha_in_close = df.groupby('netuid')['alpha_in'].last().values
-
-    df = df.sort_values(['netuid', 'time'])
-    tao_in_start = df.groupby('netuid')['tao_in'].first().values
-    tao_in_close = df.groupby('netuid')['tao_in'].last().values
-
-    flow_hour = []
-    for i in range(len(alpha_in_start)):
-        tao_return = (tao_in_close[i] - tao_in_start[i]) / tao_in_start[i]
-        alpha_return = (alpha_in_close[i] - alpha_in_start[i]) / alpha_in_start[i]
-        flow = tao_return - alpha_return
-        flow_hour.append(flow)
-
-    return flow_hour
-
-def calculate_flow_times(db, close_time, delta):
-    start_time = close_time - pd.Timedelta(hours=delta)
-
-    db_hour = db[db['time'].between(start_time, close_time, inclusive="neither")].copy()
-    df = db_hour[db_hour['netuid'] != 0]
-
-    # Sort so "first" is well-defined (important!)
-    df = df.sort_values(['netuid', 'time'])
-    alpha_in_start = df.groupby('netuid')['alpha_in'].first().values
-    alpha_in_close = df.groupby('netuid')['alpha_in'].last().values
-
-    df = df.sort_values(['netuid', 'time'])
-    tao_in_start = df.groupby('netuid')['tao_in'].first().values
-    tao_in_close = df.groupby('netuid')['tao_in'].last().values
-
-    flow_hour = []
-    for i in range(len(alpha_in_start)):
-        tao_return = (tao_in_close[i] - tao_in_start[i]) / tao_in_start[i]
-        alpha_return = (alpha_in_close[i] - alpha_in_start[i]) / alpha_in_start[i]
-        flow = tao_return - alpha_return
-        flow_hour.append(flow)
-
-    return flow_hour
-
-def calculate_ema_time(db, close_time):
-    start_time = close_time - pd.Timedelta(hours=24)
-
-    db_24h = db[db['time'].between(start_time, close_time, inclusive="neither")].copy()
-    df = db_24h[db_24h['netuid'] != 0]
-
-    # Sort so "first" is well-defined (important!)
-    df = df.sort_values(['netuid', 'time'])
-    price_close = df.groupby('netuid')['alpha_price'].last().values
-
-    pre_close_time = close_time - pd.Timedelta(hours=2)
-    pre_start_time = start_time - pd.Timedelta(hours=2)
-
-    pre_db_24h = db[db['time'].between(pre_start_time, pre_close_time, inclusive="neither")].copy()
-    pre_df = pre_db_24h[pre_db_24h['netuid'] != 0]
-
-    average_24h = pre_df.groupby('netuid')['alpha_price'].mean().values
-
-    dist = []
-    for i in range(len(price_close)):
-        ema = 0.08 * price_close[i] + 0.92 * average_24h[i]
-        distance = (price_close[i] - ema) / ema
-        dist.append(distance)
-
-    return dist
-
-def load_data():
-    conn = sqlite3.connect(r'Investing/core/db/daily1.db')
+        conn = sqlite3.connect(r'Investing/core/db/daily.db')
     conn.row_factory = sqlite3.Row
 
     cursor = conn.cursor()
@@ -612,10 +409,253 @@ def generate_stocks_strat_by_score(investing):
             start_idx += group_size
     
     return result
+
+def calculate_flow_amount(db, close_time):
+    df = db.copy()
+    df = df[df['netuid'] != 0]
+    df['time'] = pd.to_datetime(df['time'])
+
+    start_time = close_time - pd.Timedelta(hours=1)
+    if df['time'].dt.tz is None:
+        # If naive, assume it's UTC and localize
+        df['time'] = df['time'].dt.tz_localize('UTC')
+    else:
+        # If has other timezone, convert to UTC
+        df['time'] = df['time'].dt.tz_convert('UTC')
+    
+    # Convert start_time to UTC
+    if start_time.tzinfo is None:
+        start_time = pd.Timestamp(start_time).tz_localize('UTC')
+    else:
+        start_time = pd.Timestamp(start_time).tz_convert('UTC')
+    
+    # Convert close_time to UTC
+    if close_time.tzinfo is None:
+        close_time = pd.Timestamp(close_time).tz_localize('UTC')
+    else:
+        close_time = pd.Timestamp(close_time).tz_convert('UTC')
+
+    df = df[(df['time'] >= start_time) & (df['time'] <= close_time)]
+    df = df.sort_values(['netuid', 'block'])
+    alpha_in_start = df.groupby('netuid')['alpha_in'].first().values
+    alpha_in_close = df.groupby('netuid')['alpha_in'].last().values
+
+    tao_in_start = df.groupby('netuid')['tao_in'].first().values
+    tao_in_close = df.groupby('netuid')['tao_in'].last().values
+
+    flow_amounts = []
+    for i in range(len(alpha_in_start)):
+        flow_amount = (alpha_in_start[i] + alpha_in_close[i]) * (tao_in_start[i] + tao_in_close[i]) / 4
+        flow_amounts.append(flow_amount)
+    
+    return flow_amounts
+
+def normalize_flow(flow_amount):
+    # Find non-zero values
+    non_zero = [x for x in flow_amount if x != 0]
+    
+    # If all are zero, return as is
+    if not non_zero:
+        return flow_amount
+    
+    # Find min and max of non-zero values
+    min_val = min(non_zero)
+    max_val = max(non_zero)
+    
+    # Transform each value
+    result = []
+    for value in flow_amount:
+        if value == 0:
+            result.append(0)
+        else:
+            # Scale between 0 and 1
+            scaled = (value - min_val) / (max_val - min_val)
+            result.append(scaled)
+    
+    return result
+
+def calculate_momentum(db, db_data, close_time):
+    df = db.copy()
+    df = df[df['netuid'] != 0]
+    df['date'] = pd.to_datetime(df['date']).dt.date
+
+    df_data = db_data.copy()
+    df_data = df_data[df_data['netuid'] != 0]
+    df_data['time'] = pd.to_datetime(df_data['time'])
+
+    first_time = close_time - pd.Timedelta(days=30)
+    last_time = close_time - pd.Timedelta(days=1)
+    start_time = close_time - pd.Timedelta(minutes=30)
+
+    if df_data['time'].dt.tz is None:
+        # If naive, assume it's UTC and localize
+        df_data['time'] = df_data['time'].dt.tz_localize('UTC')
+    else:
+        # If has other timezone, convert to UTC
+        df_data['time'] = df_data['time'].dt.tz_convert('UTC')
+    
+    # Convert start_time to UTC
+    if start_time.tzinfo is None:
+        start_time = pd.Timestamp(start_time).tz_localize('UTC')
+    else:
+        start_time = pd.Timestamp(start_time).tz_convert('UTC')
+    
+    # Convert close_time to UTC
+    if close_time.tzinfo is None:
+        close_time = pd.Timestamp(close_time).tz_localize('UTC')
+    else:
+        close_time = pd.Timestamp(close_time).tz_convert('UTC')
+    
+    df_30d = df[(df['date'] >= first_time.date()) & (df['date'] <= last_time.date())]
+    df_1h = df_data[(df_data['time'] >= start_time) & (df_data['time'] <= close_time)]
+    df_1h = df_1h.sort_values(['netuid', 'time'])
+    price_start = df_1h.groupby('netuid')['alpha_price'].first().values
+    price_close = df_1h.groupby('netuid')['alpha_price'].last().values
+    average_price = df_30d.groupby('netuid')['price'].mean().values
+
+    momentum_scores = []
+    for i in range(len(price_start)):
+        momentum_raw = (price_start[i] + price_close[i]) / average_price[i] / 2
+        momentum_normalized = (momentum_raw - 0.8) / (1.2 - 0.8)
+        momentum_score = max(0, min(1, momentum_normalized))
+        momentum_scores.append(momentum_score)
+                               
+    return momentum_scores
+
+def calculate_tao_flow(db, db_data, close_time):
+    df = db.copy()
+    df = df[df['netuid'] != 0]
+    df['date'] = pd.to_datetime(df['date']).dt.date
+
+    df_data = db_data.copy()
+    df_data = df_data[df_data['netuid'] != 0]
+    df_data['time'] = pd.to_datetime(df_data['time'])
+
+    first_time = close_time - pd.Timedelta(days=30)
+    last_time = close_time - pd.Timedelta(days=1)
+    start_time = close_time - pd.Timedelta(minutes=30)
+
+    if df_data['time'].dt.tz is None:
+        # If naive, assume it's UTC and localize
+        df_data['time'] = df_data['time'].dt.tz_localize('UTC')
+    else:
+        # If has other timezone, convert to UTC
+        df_data['time'] = df_data['time'].dt.tz_convert('UTC')
+    
+    # Convert start_time to UTC
+    if start_time.tzinfo is None:
+        start_time = pd.Timestamp(start_time).tz_localize('UTC')
+    else:
+        start_time = pd.Timestamp(start_time).tz_convert('UTC')
+    
+    # Convert close_time to UTC
+    if close_time.tzinfo is None:
+        close_time = pd.Timestamp(close_time).tz_localize('UTC')
+    else:
+        close_time = pd.Timestamp(close_time).tz_convert('UTC')
+    
+    df_30d = df[(df['date'] >= first_time.date()) & (df['date'] <= last_time.date())]
+    df_1h = df_data[(df_data['time'] >= start_time) & (df_data['time'] <= close_time)]
+    df_1h = df_1h.sort_values(['netuid', 'time'])
+    tao_in_start = df_1h.groupby('netuid')['tao_in'].first().values
+    tao_in_close = df_1h.groupby('netuid')['tao_in'].last().values
+    tao_in_30days_ago = df_30d.groupby('netuid')['tao_in'].mean().values
+
+    tao_flow_scores = []
+    for i in range(len(tao_in_start)):
+        tao_flow_score = (((tao_in_start[i] + tao_in_close[i]) / 2) - tao_in_30days_ago[i]) / tao_in_30days_ago[i]
+        tao_flow_scores.append(tao_flow_score)
+                               
+    return tao_flow_scores
+
+def normalize_tao_flow(tao_flow_rate):
+    flow = np.array(tao_flow_rate)
+    
+    # Find min and max
+    min_val = flow.min()
+    max_val = flow.max()
+    
+    # If all values are the same, return all 0.5
+    if min_val == max_val:
+        return np.full_like(flow, 0.5, dtype=float)
+    
+    normalized = (flow - min_val) / (max_val - min_val)
+    
+    return normalized
+
+def generate_staking_strat_by_score(score, flag):
+    if flag == 0:
+        score = np.array(score, dtype=float)
+        
+        # Mask for non-zero values
+        non_zero_mask = score != 0
+        non_zero_indices = np.where(non_zero_mask)[0]
+        
+        # Get the number of non-zero values
+        non_zero_count = len(non_zero_indices)
+        
+        if non_zero_count > 0:
+            # Sort non-zero indices by their corresponding scores in descending order
+            sorted_indices = non_zero_indices[np.argsort(score[non_zero_indices])[::-1]]
+            
+            # Calculate counts for each tier based on percentages of non-zero values
+            tier1_count = int(non_zero_count * 0.435)  # Largest 43.5%
+            tier2_count = int(non_zero_count * 0.13)   # Next largest 13%
+            tier3_count = int(non_zero_count * 0.22)   # Next largest 22%
+            
+            # The remaining values get the last tier
+            # Ensure we don't exceed the total count due to rounding
+            total_assigned = tier1_count + tier2_count + tier3_count
+            if total_assigned < non_zero_count:
+                tier4_count = non_zero_count - total_assigned
+            else:
+                # Adjust if rounding caused us to exceed
+                tier4_count = 0
+                # Recalculate to ensure exact distribution
+                tier1_count = int(non_zero_count * 0.435)
+                tier2_count = int(non_zero_count * 0.13)
+                tier3_count = non_zero_count - tier1_count - tier2_count
+            
+            # Assign values to each tier
+            current_idx = 0
+            
+            # Tier 1 (largest 43.5%)
+            if tier1_count > 0:
+                tier1_indices = sorted_indices[current_idx:current_idx + tier1_count]
+                score[tier1_indices] = 0.59 / tier1_count
+                current_idx += tier1_count
+            
+            # Tier 2 (next 13%)
+            if tier2_count > 0:
+                tier2_indices = sorted_indices[current_idx:current_idx + tier2_count]
+                score[tier2_indices] = 0.13 / tier2_count
+                current_idx += tier2_count
+            
+            # Tier 3 (next 22%)
+            if tier3_count > 0:
+                tier3_indices = sorted_indices[current_idx:current_idx + tier3_count]
+                score[tier3_indices] = 0.19 / tier3_count
+                current_idx += tier3_count
+            
+            # Tier 4 (remaining)
+            if current_idx < non_zero_count:
+                tier4_indices = sorted_indices[current_idx:]
+                score[tier4_indices] = 0.09 / (non_zero_count - current_idx)
+            
+        return score
+    else:
+        new_score = np.zeros_like(score)
+        if len(score) >= 10:
+            top_10_indices = np.argsort(score)[::-1][:10]
+            new_score[top_10_indices] = 0.005
+        else:
+            new_score[:] = 0.005
+        
+        return new_score
     
 def calculate_division(close_time, asset, flag):
     if asset == 1:
-        db = load_data()
+        db = load_data(asset)
         db = pd.DataFrame(db)
 
         ma_current = calculate_ma(db, close_time)
@@ -661,38 +701,36 @@ def calculate_division(close_time, asset, flag):
             rsi_score_1 = (35 - r) / r
             price_score_1 = (res_min - cp) / cp
             score_1 = 0.2 * ema_score_1 + 0.3 * rsi_score_1 + 0.2 * volume_score + 0.3 * price_score_1
-            if close_time.weekday() == 0:
-                investing[netuid] = score
-            else:
-                investing[netuid] = score, score_1
+            # if close_time.weekday() == 0:
+            #     investing[netuid] = score
+            # else:
+            #     investing[netuid] = score, score_1
+            investing[netuid] = score
 
         strat = generate_stocks_strat_by_score(investing)
         strat_string = json.dumps(strat)
         strat_string = json.loads(strat_string)
     else:
-        db = pd.read_csv(DATA_NAME)
+        db = load_data(asset)
         db = pd.DataFrame(db)
-        remove_index = calculate_index_time(db, close_time)
-        flow_signal_1h = calculate_flow_time(db, close_time)
-        flow_signal_3h = calculate_flow_times(db, close_time, delta = 3)
-        flow_signal_24h = calculate_flow_times(db, close_time, delta = 24)
-        dist = calculate_ema_time(db, close_time)
+        db_data = pd.read_csv("data.csv")
 
-        for i in remove_index:
-            flow_signal_1h[i - 1] = 0
-            flow_signal_3h[i - 1] = 0
-            flow_signal_24h[i - 1] = 0
-            dist[i - 1] = 0
-
-        flow_signal_1h = normalize_minmax(flow_signal_1h)
-        flow_signal_3h = normalize_minmax(flow_signal_3h)
-        flow_signal_24h = normalize_minmax(flow_signal_24h)
-        dist = normalize_minmax(dist)
-
+        flow_amount = calculate_flow_amount(db_data, close_time)
+        flow_amount = np.array(flow_amount)
+        cutoff = np.percentile(flow_amount, 12)
+        flow_amount[flow_amount <= cutoff] = 0
+        flow_score = normalize_flow(flow_amount)
+        momentum_score = calculate_momentum(db, db_data, close_time)
+        tao_flow_rate = calculate_tao_flow(db, db_data, close_time)
+        tao_flow_score = normalize_tao_flow(tao_flow_rate)
+        
         score = []
-        for i in range(len(flow_signal_1h)):
-            sc = 0.4 * flow_signal_3h[i] + 0.3 * flow_signal_1h[i] + 0.2 * flow_signal_24h[i] + 0.1 * dist[i] 
-            score.append(sc)
+        for i in range(len(flow_score)):
+            if flow_score[i] == 0:
+                score.append(0)
+            else:
+                sc = 0.3 * flow_score[i] + 0.3 * momentum_score[i] + 0.4 * tao_flow_score[i]
+                score.append(sc)
 
         strat = generate_staking_strat_by_score(score, flag)
 
