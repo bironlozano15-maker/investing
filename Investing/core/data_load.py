@@ -99,12 +99,12 @@ def fetch_alpha_prices() -> list[dict]:
 
         rows.append(
             {
-                "time": fetched_at,
+                "date": fetched_at,
                 "block": subnet.get("block_number") or "",
                 "netuid": netuid,
                 "alpha_in": convert_raw_amount(alpha_in_raw),
                 "tao_in": convert_raw_amount(tao_in_raw),
-                "alpha_price": subnet.get("price") or ""
+                "price": subnet.get("price") or ""
             }
         )
 

@@ -14,34 +14,55 @@ def datetime_to_blocks(close_time) -> int:
 
 def test():
     start_time = [
-        datetime(2026, 3, 18, 13, 5, 0),
+        datetime(2026, 3, 27, 0, 0, 0),
+        datetime(2026, 3, 28, 0, 0, 0),
+        datetime(2026, 3, 29, 0, 0, 0),
     ]
 
     end_time = [
-        datetime(2026, 3, 19, 13, 5, 0), 
-    ]
+        datetime(2026, 3, 27, 23, 59, 0),
+        datetime(2026, 3, 28, 23, 59, 0),
+        datetime(2026, 3, 29, 23, 59, 0),
+    ] 
 
-    strategy_times = [
-        (datetime(2026, 3, 18, 13, 5, 0)),
-    ]
+    # strategy_times = [
+    #     (datetime(2026, 3, 13, 13, 5, 0)),
+    # ]
 
-    if ASSET == 0:
-        fund = STAKING_FUND
-        hotkey = STAKING_HOTKEY
-        uid = STAKING_UID
-        save_directory = STAKING_STRATEGY_PATH_CSV
-    else:
-        fund = STOCKS_FUND
-        hotkey = STOCKS_HOTKEY
-        uid = STOCKS_UID
-        save_directory = STOCKS_STRATEGY_PATH_CSV
+    strategy_times = []
+    for s_time, e_time in zip(start_time, end_time):
+        strategy = pd.read_csv("last10.csv")
+        strategy['datetime'] = pd.to_datetime(strategy['date'] + ' ' + strategy['time'])
+        strategy['datetime'] = strategy['datetime'].dt.tz_localize(None)
+
+        times_before_start = strategy[strategy['datetime'] < s_time]['datetime']
+        times_before_end = strategy[strategy['datetime'] < e_time]['datetime']
+        largest_before_start = times_before_start.max()
+        largest_before_end = times_before_end.max()
+
+        strat_times = strategy[
+            (strategy['datetime'] >= largest_before_start) & 
+            (strategy['datetime'] <= largest_before_end)
+        ]['datetime'].tolist()
+        strategy_times.append(strat_times)
 
     for s_time, e_time, strat_times in zip(start_time, end_time, strategy_times):
+        if ASSET == 0:
+            fund = STAKING_FUND
+            hotkey = STAKING_HOTKEY
+            uid = STAKING_UID
+            save_directory = STAKING_STRATEGY_PATH_CSV
+        else:
+            fund = STOCKS_FUND
+            hotkey = STOCKS_HOTKEY
+            uid = STOCKS_UID
+            save_directory = STOCKS_STRATEGY_PATH_CSV
+
         strat_times = strat_times if isinstance(strat_times, (list, tuple)) else [strat_times]
         for i, strat_time in enumerate(strat_times):
             start = max(s_time, strat_time)
-            strat = generate_strat(start, ASSET, 0)
-            # strat = {1:0.012876876868,2:0.012876876868,3:0.003029853381,4:0.003029853381,5:0.002642631930,6:0.009847023487,7:0.002642631930,8:0.012876876868,9:0.003029853381,10:0.009847023487,11:0.009847023487,12:0.009847023487,13:0.002642631930,14:0.002642631930,15:0.002642631930,16:0.012876876868,17:0.003029853381,18:0.012876876868,19:0.002642631930,20:0.002642631930,21:0.009847023487,22:0.002642631930,23:0.012876876868,24:0.002642631930,25:0.012876876868,26:0.012876876868,27:0.002642631930,28:0.002642631930,29:0.002642631930,30:0.002642631930,31:0.002642631930,32:0.002642631930,33:0.012876876868,34:0.012876876868,35:0.002642631930,36:0.012876876868,37:0.012876876868,38:0.002642631930,39:0.012876876868,40:0.002642631930,41:0.009847023487,42:0.002642631930,43:0.012876876868,44:0.012876876868,45:0.009847023487,46:0.012876876868,48:0.009847023487,49:0.002642631930,50:0.009847023487,51:0.012876876868,52:0.012876876868,53:0.012876876868,54:0.009847023487,55:0.002642631930,56:0.002642631930,57:0.012876876868,58:0.009847023487,59:0.002642631930,60:0.002642631930,61:0.012876876868,62:0.009847023487,63:0.002642631930,64:0.012876876868,65:0.012876876868,66:0.012876876868,68:0.002642631930,69:0.009847023487,71:0.002642631930,72:0.012876876868,73:0.012876876868,74:0.002642631930,75:0.009847023487,77:0.012876876868,78:0.012876876868,79:0.012876876868,80:0.002642631930,81:0.012876876868,82:0.009847023487,83:0.009847023487,84:0.009847023487,85:0.012876876868,86:0.002642631930,87:0.002642631930,88:0.012876876868,89:0.012876876868,90:0.012876876868,92:0.002642631930,93:0.002642631930,94:0.002642631930,95:0.012876876868,98:0.009847023487,100:0.012876876868,101:0.002642631930,103:0.009847023487,104:0.012876876868,105:0.012876876868,106:0.009847023487,107:0.002642631930,108:0.009847023487,109:0.005637242411,110:0.012876876868,111:0.012876876868,112:0.012876876868,113:0.002642631930,114:0.002642631930,115:0.012876876868,116:0.012876876868,117:0.012876876868,118:0.012876876868,119:0.012876876868,120:0.003029853381,121:0.012876876868,122:0.012876876868,123:0.002642631930,124:0.012876876868,125:0.012876876868,127:0.002642631930,128:0.012876876868}
+            # strat = generate_strat(strat_time, ASSET, 0)
+            strat = strategy[strategy['datetime'] == strat_time]['strat'].values[0]
             new_row = pd.DataFrame([[uid, hotkey, start.date(), start.time(), 
                             datetime_to_blocks(start), fund, strat]], 
                             columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])

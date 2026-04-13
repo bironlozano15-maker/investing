@@ -413,29 +413,13 @@ def generate_stocks_strat_by_score(investing):
 def calculate_flow_amount(db, close_time):
     df = db.copy()
     df = df[df['netuid'] != 0]
-    df['time'] = pd.to_datetime(df['time'])
+    df['date'] = pd.to_datetime(df['date'])
 
     start_time = close_time - pd.Timedelta(hours=1)
-    if df['time'].dt.tz is None:
-        # If naive, assume it's UTC and localize
-        df['time'] = df['time'].dt.tz_localize('UTC')
-    else:
-        # If has other timezone, convert to UTC
-        df['time'] = df['time'].dt.tz_convert('UTC')
-    
-    # Convert start_time to UTC
-    if start_time.tzinfo is None:
-        start_time = pd.Timestamp(start_time).tz_localize('UTC')
-    else:
-        start_time = pd.Timestamp(start_time).tz_convert('UTC')
-    
-    # Convert close_time to UTC
-    if close_time.tzinfo is None:
-        close_time = pd.Timestamp(close_time).tz_localize('UTC')
-    else:
-        close_time = pd.Timestamp(close_time).tz_convert('UTC')
+    start_block = datetime_to_blocks(start_time)
+    close_block = datetime_to_blocks(close_time)
 
-    df = df[(df['time'] >= start_time) & (df['time'] <= close_time)]
+    df = df[(df['block'] >= start_block) & (df['block'] <= close_block)]
     df = df.sort_values(['netuid', 'block'])
     alpha_in_start = df.groupby('netuid')['alpha_in'].first().values
     alpha_in_close = df.groupby('netuid')['alpha_in'].last().values
@@ -474,43 +458,22 @@ def normalize_flow(flow_amount):
     
     return result
 
-def calculate_momentum(db, db_data, close_time):
+def calculate_momentum(db, close_time):
     df = db.copy()
     df = df[df['netuid'] != 0]
     df['date'] = pd.to_datetime(df['date']).dt.date
 
-    df_data = db_data.copy()
-    df_data = df_data[df_data['netuid'] != 0]
-    df_data['time'] = pd.to_datetime(df_data['time'])
-
     first_time = close_time - pd.Timedelta(days=30)
     last_time = close_time - pd.Timedelta(days=1)
-    start_time = close_time - pd.Timedelta(minutes=30)
-
-    if df_data['time'].dt.tz is None:
-        # If naive, assume it's UTC and localize
-        df_data['time'] = df_data['time'].dt.tz_localize('UTC')
-    else:
-        # If has other timezone, convert to UTC
-        df_data['time'] = df_data['time'].dt.tz_convert('UTC')
-    
-    # Convert start_time to UTC
-    if start_time.tzinfo is None:
-        start_time = pd.Timestamp(start_time).tz_localize('UTC')
-    else:
-        start_time = pd.Timestamp(start_time).tz_convert('UTC')
-    
-    # Convert close_time to UTC
-    if close_time.tzinfo is None:
-        close_time = pd.Timestamp(close_time).tz_localize('UTC')
-    else:
-        close_time = pd.Timestamp(close_time).tz_convert('UTC')
+    start_time = close_time - pd.Timedelta(hours=2)
+    start_block = datetime_to_blocks(start_time)
+    close_block = datetime_to_blocks(close_time)
     
     df_30d = df[(df['date'] >= first_time.date()) & (df['date'] <= last_time.date())]
-    df_1h = df_data[(df_data['time'] >= start_time) & (df_data['time'] <= close_time)]
-    df_1h = df_1h.sort_values(['netuid', 'time'])
-    price_start = df_1h.groupby('netuid')['alpha_price'].first().values
-    price_close = df_1h.groupby('netuid')['alpha_price'].last().values
+    df_1h = df[(df['block'] >= start_block) & (df['block'] <= close_block)]
+    df_1h = df_1h.sort_values(['netuid', 'block'])
+    price_start = df_1h.groupby('netuid')['price'].first().values
+    price_close = df_1h.groupby('netuid')['price'].last().values
     average_price = df_30d.groupby('netuid')['price'].mean().values
 
     momentum_scores = []
@@ -522,41 +485,20 @@ def calculate_momentum(db, db_data, close_time):
                                
     return momentum_scores
 
-def calculate_tao_flow(db, db_data, close_time):
+def calculate_tao_flow(db, close_time):
     df = db.copy()
     df = df[df['netuid'] != 0]
     df['date'] = pd.to_datetime(df['date']).dt.date
 
-    df_data = db_data.copy()
-    df_data = df_data[df_data['netuid'] != 0]
-    df_data['time'] = pd.to_datetime(df_data['time'])
-
     first_time = close_time - pd.Timedelta(days=30)
     last_time = close_time - pd.Timedelta(days=1)
-    start_time = close_time - pd.Timedelta(minutes=30)
-
-    if df_data['time'].dt.tz is None:
-        # If naive, assume it's UTC and localize
-        df_data['time'] = df_data['time'].dt.tz_localize('UTC')
-    else:
-        # If has other timezone, convert to UTC
-        df_data['time'] = df_data['time'].dt.tz_convert('UTC')
-    
-    # Convert start_time to UTC
-    if start_time.tzinfo is None:
-        start_time = pd.Timestamp(start_time).tz_localize('UTC')
-    else:
-        start_time = pd.Timestamp(start_time).tz_convert('UTC')
-    
-    # Convert close_time to UTC
-    if close_time.tzinfo is None:
-        close_time = pd.Timestamp(close_time).tz_localize('UTC')
-    else:
-        close_time = pd.Timestamp(close_time).tz_convert('UTC')
+    start_time = close_time - pd.Timedelta(hours=2)
+    start_block = datetime_to_blocks(start_time)
+    close_block = datetime_to_blocks(close_time)
     
     df_30d = df[(df['date'] >= first_time.date()) & (df['date'] <= last_time.date())]
-    df_1h = df_data[(df_data['time'] >= start_time) & (df_data['time'] <= close_time)]
-    df_1h = df_1h.sort_values(['netuid', 'time'])
+    df_1h = df[(df['block'] >= start_block) & (df['block'] <= close_block)]
+    df_1h = df_1h.sort_values(['netuid', 'block'])
     tao_in_start = df_1h.groupby('netuid')['tao_in'].first().values
     tao_in_close = df_1h.groupby('netuid')['tao_in'].last().values
     tao_in_30days_ago = df_30d.groupby('netuid')['tao_in'].mean().values
@@ -713,15 +655,23 @@ def calculate_division(close_time, asset, flag):
     else:
         db = load_data(asset)
         db = pd.DataFrame(db)
+        columns_to_keep = ['date', 'block', 'netuid', 'alpha_in', 'tao_in', 'price']
+        db = db[columns_to_keep]
         db_data = pd.read_csv("data.csv")
+        db_data['date'] = pd.to_datetime(db_data['date']).dt.strftime('%Y-%m-%d')
+        close_block = datetime_to_blocks(close_time)
+        max_block_db = db['block'].max()
+        if max_block_db < close_block:
+            additional_data = db_data[(db_data['block'] > max_block_db) & (db_data['block'] <= close_block)]
+            db = pd.concat([db, additional_data], ignore_index=True)
 
-        flow_amount = calculate_flow_amount(db_data, close_time)
+        flow_amount = calculate_flow_amount(db, close_time)
         flow_amount = np.array(flow_amount)
         cutoff = np.percentile(flow_amount, 12)
         flow_amount[flow_amount <= cutoff] = 0
         flow_score = normalize_flow(flow_amount)
-        momentum_score = calculate_momentum(db, db_data, close_time)
-        tao_flow_rate = calculate_tao_flow(db, db_data, close_time)
+        momentum_score = calculate_momentum(db, close_time)
+        tao_flow_rate = calculate_tao_flow(db, close_time)
         tao_flow_score = normalize_tao_flow(tao_flow_rate)
         
         score = []
