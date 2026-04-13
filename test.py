@@ -13,38 +13,36 @@ def datetime_to_blocks(close_time) -> int:
     return int(BASE_BLOCK + delta_sec // BLOCK_SECONDS)
 
 def test():
+    signal = 0
     start_time = [
-        datetime(2026, 3, 27, 0, 0, 0),
-        datetime(2026, 3, 28, 0, 0, 0),
-        datetime(2026, 3, 29, 0, 0, 0),
+        datetime(2026, 3, 12, 0, 0, 0),
     ]
 
     end_time = [
-        datetime(2026, 3, 27, 23, 59, 0),
-        datetime(2026, 3, 28, 23, 59, 0),
-        datetime(2026, 3, 29, 23, 59, 0),
+        datetime(2026, 3, 12, 23, 59, 0),
     ] 
 
-    # strategy_times = [
-    #     (datetime(2026, 3, 13, 13, 5, 0)),
-    # ]
+    if signal == 0:
+        strategy_times = [
+            (datetime(2026, 3, 11, 13, 5, 0), datetime(2026, 3, 12, 13, 5, 0)),
+        ]
+    else:
+        strategy_times = []
+        for s_time, e_time in zip(start_time, end_time):
+            strategy = pd.read_csv("last10.csv")
+            strategy['datetime'] = pd.to_datetime(strategy['date'] + ' ' + strategy['time'])
+            strategy['datetime'] = strategy['datetime'].dt.tz_localize(None)
 
-    strategy_times = []
-    for s_time, e_time in zip(start_time, end_time):
-        strategy = pd.read_csv("last10.csv")
-        strategy['datetime'] = pd.to_datetime(strategy['date'] + ' ' + strategy['time'])
-        strategy['datetime'] = strategy['datetime'].dt.tz_localize(None)
+            times_before_start = strategy[strategy['datetime'] < s_time]['datetime']
+            times_before_end = strategy[strategy['datetime'] < e_time]['datetime']
+            largest_before_start = times_before_start.max()
+            largest_before_end = times_before_end.max()
 
-        times_before_start = strategy[strategy['datetime'] < s_time]['datetime']
-        times_before_end = strategy[strategy['datetime'] < e_time]['datetime']
-        largest_before_start = times_before_start.max()
-        largest_before_end = times_before_end.max()
-
-        strat_times = strategy[
-            (strategy['datetime'] >= largest_before_start) & 
-            (strategy['datetime'] <= largest_before_end)
-        ]['datetime'].tolist()
-        strategy_times.append(strat_times)
+            strat_times = strategy[
+                (strategy['datetime'] >= largest_before_start) & 
+                (strategy['datetime'] <= largest_before_end)
+            ]['datetime'].tolist()
+            strategy_times.append(strat_times)
 
     for s_time, e_time, strat_times in zip(start_time, end_time, strategy_times):
         if ASSET == 0:
@@ -61,8 +59,10 @@ def test():
         strat_times = strat_times if isinstance(strat_times, (list, tuple)) else [strat_times]
         for i, strat_time in enumerate(strat_times):
             start = max(s_time, strat_time)
-            # strat = generate_strat(strat_time, ASSET, 0)
-            strat = strategy[strategy['datetime'] == strat_time]['strat'].values[0]
+            if signal == 0:
+                strat = generate_strat(strat_time, ASSET, 0)
+            else:
+                strat = strategy[strategy['datetime'] == strat_time]['strat'].values[0]
             new_row = pd.DataFrame([[uid, hotkey, start.date(), start.time(), 
                             datetime_to_blocks(start), fund, strat]], 
                             columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
