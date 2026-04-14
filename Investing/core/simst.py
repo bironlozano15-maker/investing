@@ -505,7 +505,7 @@ def sc2pct(self):
     j3 = ['value', 'swap']
     j2 = ['score', 'mar']
     jp = [j for j in sc.columns if j[-1:] == '%' and j != 'daily%']
-    sc[j3] = sc[j3].map('{:.3e}'.format)
+    sc[j3] = sc[j3].map('{:.2f}'.format)
     sc[j2] = sc[j2].map('{:.2f}'.format)
     sc[jp] = sc[jp].map('{:.2f}%'.format)
     sc['lsr'] = sc['lsr'].map('{:.4f}'.format)

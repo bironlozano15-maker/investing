@@ -1,30 +1,151 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 import os
 import pandas as pd
 from Investing.core.define import *
 from Investing.core.generate_st import generate_strat
 from Investing.core.simst import SimSt
-from Investing.core.thread_strat import calculate_flag
-
 
 def datetime_to_blocks(close_time) -> int:
     base_dt = datetime.strptime(BASE_TIME_STR, '%Y-%m-%d %H:%M:%S')
     delta_sec = (close_time - base_dt).total_seconds()
     return int(BASE_BLOCK + delta_sec // BLOCK_SECONDS)
 
+def calculate_score(save_directory, end, fund, end_flag):
+    csv, fund, end, clip, win = (
+        os.path.join(save_directory),
+        fund,
+        end,
+        2,
+        30
+    )
+
+    sim = SimSt(pd.read_csv(csv))
+    if fund: sim.fi['fund'] = fund
+    if clip >= 0: sim.clip_outliers = clip
+    if win: sim.win_size = [win] * AN
+    if end:
+        sim.db[:AN] = [bn[pd.to_datetime(bn['date']) <= end] if len(bn) else bn for bn in sim.db[:AN]]
+    dates = sorted(set([d for bn in sim.db[:AN] if len(bn) for d in bn['date'].values]))
+    for date in dates:
+        sim.pldaily(date, end)
+        sim.pldaily1(date, end)
+        sim.plfinal()
+    sim.pl2sc()
+    if sim.pnl_dir:
+        os.makedirs(sim.pnl_dir, exist_ok=True)
+        sim.pl.to_csv(os.path.join(sim.pnl_dir, f'PnL_{os.path.basename(csv)}'))
+    if not len(sim.sc): return
+    print(f'clip outlier days: {sim.clip_outliers}, rolling window days: {sim.win_size}')
+    print(sim.sc2pct().to_string(index=False))
+    swap = (sim.sc2pct().swap.values[0])
+    value = (sim.sc2pct().value.values[0])
+    fund = float(swap)
+    os.remove(save_directory)
+    return swap
+
 def test():
-    signal = 0
+    signal = 1
     start_time = [
-        datetime(2026, 3, 12, 0, 0, 0),
+        # datetime(2026, 3, 11, 0, 12, 23),
+        # datetime(2026, 3, 20, 4, 19, 43),
+        # datetime(2026, 3, 25, 3, 46, 9),
+        # datetime(2026, 3, 30, 3, 20, 1),
+        # datetime(2026, 4, 3, 4, 54, 45),
+        datetime(2026, 3, 12, 0, 0, 1),
+        datetime(2026, 3, 13, 0, 0, 1),
+        datetime(2026, 3, 14, 0, 0, 1),
+        datetime(2026, 3, 15, 0, 0, 1),
+        datetime(2026, 3, 16, 0, 0, 1),
+        datetime(2026, 3, 17, 0, 0, 1),
+        datetime(2026, 3, 18, 0, 0, 1),
+        datetime(2026, 3, 19, 0, 0, 1),
+        datetime(2026, 3, 20, 0, 0, 1),
+        datetime(2026, 3, 21, 0, 0, 1),
+        datetime(2026, 3, 22, 0, 0, 1),
+        datetime(2026, 3, 23, 0, 0, 1),
+        datetime(2026, 3, 24, 0, 0, 1),
+        datetime(2026, 3, 25, 0, 0, 1),
+        datetime(2026, 3, 26, 0, 0, 1),
+        datetime(2026, 3, 27, 0, 0, 1),
+        datetime(2026, 3, 28, 0, 0, 1),
+        datetime(2026, 3, 29, 0, 0, 1),
+        datetime(2026, 3, 30, 0, 0, 1),
+        datetime(2026, 3, 31, 0, 0, 1),
+        datetime(2026, 4, 1, 0, 0, 1),
+        datetime(2026, 4, 2, 0, 0, 1),
+        datetime(2026, 4, 3, 0, 0, 1),
+        datetime(2026, 4, 4, 0, 0, 1),
+        datetime(2026, 4, 5, 0, 0, 1),
+        datetime(2026, 4, 6, 0, 0, 1),
     ]
 
     end_time = [
-        datetime(2026, 3, 12, 23, 59, 0),
+        # datetime(2026, 3, 20, 4, 19, 43),
+        # datetime(2026, 3, 25, 3, 46, 9),
+        # datetime(2026, 3, 30, 3, 20, 1),
+        # datetime(2026, 4, 3, 4, 54, 45),
+        # datetime(2026, 4, 7, 7, 23, 8),
+        datetime(2026, 3, 12, 23, 59, 59),
+        datetime(2026, 3, 13, 23, 59, 59),
+        datetime(2026, 3, 14, 23, 59, 59),
+        datetime(2026, 3, 15, 23, 59, 59),
+        datetime(2026, 3, 16, 23, 59, 59),
+        datetime(2026, 3, 17, 23, 59, 59),
+        datetime(2026, 3, 18, 23, 59, 59),
+        datetime(2026, 3, 19, 23, 59, 59),
+        datetime(2026, 3, 20, 23, 59, 59),
+        datetime(2026, 3, 21, 23, 59, 59),
+        datetime(2026, 3, 22, 23, 59, 59),
+        datetime(2026, 3, 23, 23, 59, 59),
+        datetime(2026, 3, 24, 23, 59, 59),
+        datetime(2026, 3, 25, 23, 59, 59),
+        datetime(2026, 3, 26, 23, 59, 59),
+        datetime(2026, 3, 27, 23, 59, 59),
+        datetime(2026, 3, 28, 23, 59, 59),
+        datetime(2026, 3, 29, 23, 59, 59),
+        datetime(2026, 3, 30, 23, 59, 59),
+        datetime(2026, 3, 31, 23, 59, 59),
+        datetime(2026, 4, 1, 23, 59, 59),
+        datetime(2026, 4, 2, 23, 59, 59),
+        datetime(2026, 4, 3, 23, 59, 59),
+        datetime(2026, 4, 4, 23, 59, 59),
+        datetime(2026, 4, 5, 23, 59, 59),
+        datetime(2026, 4, 6, 23, 59, 59),
     ] 
 
     if signal == 0:
         strategy_times = [
+            # (datetime(2026, 3, 10, 13, 5, 0), datetime(2026, 3, 11, 13, 5, 0), datetime(2026, 3, 12, 13, 5, 0), datetime(2026, 3, 13, 13, 5, 0), datetime(2026, 3, 14, 13, 5, 0), datetime(2026, 3, 15, 13, 5, 0), datetime(2026, 3, 16, 13, 5, 0), datetime(2026, 3, 17, 13, 5, 0), datetime(2026, 3, 18, 13, 5, 0), datetime(2026, 3, 19, 13, 5, 0)),
+            # (datetime(2026, 3, 19, 13, 5, 0), datetime(2026, 3, 20, 13, 5, 0), datetime(2026, 3, 21, 13, 5, 0), datetime(2026, 3, 22, 13, 5, 0), datetime(2026, 3, 23, 13, 5, 0), datetime(2026, 3, 24, 13, 5, 0)),
+            # (datetime(2026, 3, 24, 13, 5, 0), datetime(2026, 3, 25, 13, 5, 0), datetime(2026, 3, 26, 13, 5, 0), datetime(2026, 3, 27, 13, 5, 0), datetime(2026, 3, 28, 13, 5, 0), datetime(2026, 3, 29, 13, 5, 0)),
+            # (datetime(2026, 3, 29, 13, 5, 0), datetime(2026, 3, 30, 13, 5, 0), datetime(2026, 3, 31, 13, 5, 0), datetime(2026, 4, 1, 13, 5, 0), datetime(2026, 4, 2, 13, 5, 0)),
+            # (datetime(2026, 4, 2, 13, 5, 0), datetime(2026, 4, 3, 13, 5, 0), datetime(2026, 4, 4, 13, 5, 0), datetime(2026, 4, 5, 13, 5, 0), datetime(2026, 4, 6, 13, 5, 0)),
             (datetime(2026, 3, 11, 13, 5, 0), datetime(2026, 3, 12, 13, 5, 0)),
+            (datetime(2026, 3, 12, 13, 5, 0), datetime(2026, 3, 13, 13, 5, 0)),
+            (datetime(2026, 3, 13, 13, 5, 0), datetime(2026, 3, 14, 13, 5, 0)),
+            (datetime(2026, 3, 14, 13, 5, 0), datetime(2026, 3, 15, 13, 5, 0)),
+            (datetime(2026, 3, 15, 13, 5, 0), datetime(2026, 3, 16, 13, 5, 0)),
+            (datetime(2026, 3, 16, 13, 5, 0), datetime(2026, 3, 17, 13, 5, 0)),
+            (datetime(2026, 3, 17, 13, 5, 0), datetime(2026, 3, 18, 13, 5, 0)),
+            (datetime(2026, 3, 18, 13, 5, 0), datetime(2026, 3, 19, 13, 5, 0)),
+            (datetime(2026, 3, 19, 13, 5, 0), datetime(2026, 3, 20, 13, 5, 0)),
+            (datetime(2026, 3, 20, 13, 5, 0), datetime(2026, 3, 21, 13, 5, 0)),
+            (datetime(2026, 3, 21, 13, 5, 0), datetime(2026, 3, 22, 13, 5, 0)),
+            (datetime(2026, 3, 22, 13, 5, 0), datetime(2026, 3, 23, 13, 5, 0)),
+            (datetime(2026, 3, 23, 13, 5, 0), datetime(2026, 3, 24, 13, 5, 0)),
+            (datetime(2026, 3, 24, 13, 5, 0), datetime(2026, 3, 25, 13, 5, 0)),
+            (datetime(2026, 3, 25, 13, 5, 0), datetime(2026, 3, 26, 13, 5, 0)),
+            (datetime(2026, 3, 26, 13, 5, 0), datetime(2026, 3, 27, 13, 5, 0)),
+            (datetime(2026, 3, 27, 13, 5, 0), datetime(2026, 3, 28, 13, 5, 0)),
+            (datetime(2026, 3, 28, 13, 5, 0), datetime(2026, 3, 29, 13, 5, 0)),
+            (datetime(2026, 3, 29, 13, 5, 0), datetime(2026, 3, 30, 13, 5, 0)),
+            (datetime(2026, 3, 30, 13, 5, 0), datetime(2026, 3, 31, 13, 5, 0)),
+            (datetime(2026, 3, 31, 13, 5, 0), datetime(2026, 4, 1, 13, 5, 0)),
+            (datetime(2026, 4, 1, 13, 5, 0), datetime(2026, 4, 2, 13, 5, 0)),
+            (datetime(2026, 4, 2, 13, 5, 0), datetime(2026, 4, 3, 13, 5, 0)),
+            (datetime(2026, 4, 3, 13, 5, 0), datetime(2026, 4, 4, 13, 5, 0)),
+            (datetime(2026, 4, 4, 13, 5, 0), datetime(2026, 4, 5, 13, 5, 0)),
+            (datetime(2026, 4, 5, 13, 5, 0), datetime(2026, 4, 6, 13, 5, 0)),
         ]
     else:
         strategy_times = []
@@ -33,7 +154,7 @@ def test():
             strategy['datetime'] = pd.to_datetime(strategy['date'] + ' ' + strategy['time'])
             strategy['datetime'] = strategy['datetime'].dt.tz_localize(None)
 
-            times_before_start = strategy[strategy['datetime'] < s_time]['datetime']
+            times_before_start = strategy[strategy['datetime'] <= s_time]['datetime']
             times_before_end = strategy[strategy['datetime'] < e_time]['datetime']
             largest_before_start = times_before_start.max()
             largest_before_end = times_before_end.max()
@@ -43,6 +164,15 @@ def test():
                 (strategy['datetime'] <= largest_before_end)
             ]['datetime'].tolist()
             strategy_times.append(strat_times)
+
+    # event_times = [
+    #     datetime(2026, 3, 13, 3, 50, 0),
+    #     datetime(2026, 3, 15, 3, 5, 0),
+    #     datetime(2026, 3, 20, 3, 20, 0),
+    #     datetime(2026, 3, 24, 2, 0, 0),
+    #     datetime(2026, 3, 24, 13, 5, 0),
+    #     datetime(2026, 3, 25, 13, 5, 0),
+    # ]
 
     for s_time, e_time, strat_times in zip(start_time, end_time, strategy_times):
         if ASSET == 0:
@@ -58,7 +188,12 @@ def test():
 
         strat_times = strat_times if isinstance(strat_times, (list, tuple)) else [strat_times]
         for i, strat_time in enumerate(strat_times):
+            # flag = 1 if strat_time in event_times else 0
             start = max(s_time, strat_time)
+            # if strat_time.hour >= 13:
+            #     strat_time = strat_time.replace(hour=13, minute=5, second=0, microsecond=0)
+            # else:
+            #     strat_time = strat_time.replace(hour=13, minute=5, second=0, microsecond=0) - timedelta(days=1)
             if signal == 0:
                 strat = generate_strat(strat_time, ASSET, 0)
             else:
@@ -71,36 +206,17 @@ def test():
 
             if i + 1 < len(strat_times):
                 end = min(strat_times[i+1], e_time)
+                calculate_score(save_directory, end, fund, 0)
             else:
                 end = e_time
-            csv, fund, end, clip, win = (
-                os.path.join(save_directory),
-                fund,
-                end,
-                2,
-                30
-            )
-
-            sim = SimSt(pd.read_csv(csv))
-            if fund: sim.fi['fund'] = fund
-            if clip >= 0: sim.clip_outliers = clip
-            if win: sim.win_size = [win] * AN
-            if end:
-                sim.db[:AN] = [bn[pd.to_datetime(bn['date']) <= end] if len(bn) else bn for bn in sim.db[:AN]]
-            dates = sorted(set([d for bn in sim.db[:AN] if len(bn) for d in bn['date'].values]))
-            for date in dates:
-                sim.pldaily(date, end)
-                sim.pldaily1(date, end)
-                sim.plfinal()
-            sim.pl2sc()
-            if sim.pnl_dir:
-                os.makedirs(sim.pnl_dir, exist_ok=True)
-                sim.pl.to_csv(os.path.join(sim.pnl_dir, f'PnL_{os.path.basename(csv)}'))
-            if not len(sim.sc): return
-            print(f'clip outlier days: {sim.clip_outliers}, rolling window days: {sim.win_size}')
-            print(sim.sc2pct().to_string(index=False))
-            swap = (sim.sc2pct().swap.values[0])
-            fund = float(swap)
-            os.remove(save_directory)
+                value = calculate_score(save_directory, end, fund, 1)
+                # Create DataFrame with new row
+                new_row = pd.DataFrame({'start_date': [s_time], 'end_date': [e_time], 'value': [value]})
+                
+                # Append to CSV (create file with headers if new)
+                if not os.path.exists('result4.csv'):
+                    new_row.to_csv('result4.csv', index=False)
+                else:
+                    new_row.to_csv('result4.csv', mode='a', header=False, index=False)
 
 if __name__ == "__main__": test()
