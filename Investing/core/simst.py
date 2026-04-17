@@ -458,6 +458,12 @@ def pltotal(self, dh, date, a, b=[]):
         if len(b): dd = dd[dd['block'].isin(b['block'])]
         dd = dd.drop_duplicates(['block', 'netuid'])
         dd = dd[kb + col[-2:]].groupby(kb).sum().reset_index()
+        # Override value_open with previous day's value_close if same strategy
+        if len(pl) > 0:
+            last_row = pl.iloc[-1]
+            if last_row['uid'] == gg[0] and last_row['hotkey'] == gg[1]:
+                # Set current day's value_open to previous day's value_close
+                dd.iloc[0, dd.columns.get_loc('value')] = last_row['value_close']
         loc  = [dd.iloc[0,-3:]]
         loc += [dd[dd['swap'] == dd['swap'].max()].iloc[-1,-3:]]
         loc += [dd[dd['swap'] == dd['swap'].min()].iloc[-1,-3:]]
@@ -472,6 +478,7 @@ def plfinal(self):
     self.hlappend(self.hl)
     self.plappend(self.pl)
     delattr(self, '_hl')
+    return self.pl
 
 def pl2sc(self):
     pl, sc = self.pl, self.sc
@@ -485,17 +492,17 @@ def pl2sc(self):
         dd.loc[0, 'pnl'] = dd['swap_close'].iat[0] - init
         dd.loc[0, 'pnl%'] = dd['pnl'].iat[0] / init * 100
 
-        ii = dd[dd['pnl%'] > 0].sort_values('pnl%')[::-1][:self.clip_outliers + 1].index
-        if len(ii) == 0: clip = 0
-        elif len(ii) == self.clip_outliers + 1: clip = dd['pnl%'][ii[-1]]
-        else: clip = min(self.clip_default, dd['pnl%'][ii[-1]])
-        dd.loc[ii, 'pnl%'] = clip
-        for i in ii:
-            open = dd['swap_close'][i-1] if i else init
-            dd.loc[i:, 'swap_close'] -= dd['swap_close'][i] - open * (1 + clip / 100)
-            dd.loc[i, 'pnl'] = open * clip / 100
+        # ii = dd[dd['pnl%'] > 0].sort_values('pnl%')[::-1][:self.clip_outliers + 1].index
+        # if len(ii) == 0: clip = 0
+        # elif len(ii) == self.clip_outliers + 1: clip = dd['pnl%'][ii[-1]]
+        # else: clip = min(self.clip_default, dd['pnl%'][ii[-1]])
+        # dd.loc[ii, 'pnl%'] = clip
+        # for i in ii:
+        #     open = dd['swap_close'][i-1] if i else init
+        #     dd.loc[i:, 'swap_close'] -= dd['swap_close'][i] - open * (1 + clip / 100)
+        #     dd.loc[i, 'pnl'] = open * clip / 100
         sc.loc[len(sc)] = *gg, date, a, days, *score(dd, self.risk_init[a])[1:]
-    #sc.loc[sc['days'] < DAYS_FINAL, 'score'] *= sc['days'] / (sc['days'] + DAYS_INIT)
+    # sc.loc[sc['days'] < DAYS_FINAL, 'score'] *= sc['days'] / (sc['days'] + DAYS_INIT)
     sc.loc[sc['days'] < DAYS_FINAL, 'score'] *= (sc['days'] / DAYS_FINAL) ** DAYS_DELAY
     self.sc = sc.sort_values(['score', 'return%'], ascending=False)
     self.scappend(sc)

@@ -525,75 +525,76 @@ def normalize_tao_flow(tao_flow_rate):
     
     return normalized
 
-def generate_staking_strat_by_score(score, flag):
-    if flag == 0:
-        score = np.array(score, dtype=float)
-        
-        # Mask for non-zero values
-        non_zero_mask = score != 0
-        non_zero_indices = np.where(non_zero_mask)[0]
-        
-        # Get the number of non-zero values
-        non_zero_count = len(non_zero_indices)
-        
-        if non_zero_count > 0:
-            # Sort non-zero indices by their corresponding scores in descending order
-            sorted_indices = non_zero_indices[np.argsort(score[non_zero_indices])[::-1]]
-            
-            # Calculate counts for each tier based on percentages of non-zero values
-            tier1_count = int(non_zero_count * 0.435)  # Largest 43.5%
-            tier2_count = int(non_zero_count * 0.13)   # Next largest 13%
-            tier3_count = int(non_zero_count * 0.22)   # Next largest 22%
-            
-            # The remaining values get the last tier
-            # Ensure we don't exceed the total count due to rounding
-            total_assigned = tier1_count + tier2_count + tier3_count
-            if total_assigned < non_zero_count:
-                tier4_count = non_zero_count - total_assigned
-            else:
-                # Adjust if rounding caused us to exceed
-                tier4_count = 0
-                # Recalculate to ensure exact distribution
-                tier1_count = int(non_zero_count * 0.435)
-                tier2_count = int(non_zero_count * 0.13)
-                tier3_count = non_zero_count - tier1_count - tier2_count
-            
-            # Assign values to each tier
-            current_idx = 0
-            
-            # Tier 1 (largest 43.5%)
-            if tier1_count > 0:
-                tier1_indices = sorted_indices[current_idx:current_idx + tier1_count]
-                score[tier1_indices] = 0.59 / tier1_count
-                current_idx += tier1_count
-            
-            # Tier 2 (next 13%)
-            if tier2_count > 0:
-                tier2_indices = sorted_indices[current_idx:current_idx + tier2_count]
-                score[tier2_indices] = 0.13 / tier2_count
-                current_idx += tier2_count
-            
-            # Tier 3 (next 22%)
-            if tier3_count > 0:
-                tier3_indices = sorted_indices[current_idx:current_idx + tier3_count]
-                score[tier3_indices] = 0.19 / tier3_count
-                current_idx += tier3_count
-            
-            # Tier 4 (remaining)
-            if current_idx < non_zero_count:
-                tier4_indices = sorted_indices[current_idx:]
-                score[tier4_indices] = 0.09 / (non_zero_count - current_idx)
-            
-        return score
+def generate_staking_strat_by_score(score):
+    score = np.array(score)
+    
+    # Get indices that would sort the scores in descending order
+    sorted_indices = np.argsort(score)[::-1]
+    
+    # Select top 75 scores and set others to 0
+    strat = np.zeros_like(score, dtype=float)
+    top_indices = sorted_indices[:75]
+    
+    # Get the top 75 scores
+    top_scores = score[top_indices]
+    n = len(top_scores)  # n = 75
+    
+    # We need: min_value = 0.009, max_value = 0.017, sum = 1
+    # For n values with min = a, max = b, and sum = S
+    # Values are linearly spaced based on scores
+    
+    if n == 1:
+        # Only one value, must be 1.0 (but this violates min/max if 1.0 not in range)
+        scaled_values = np.array([1.0])
     else:
-        new_score = np.zeros_like(score)
-        if len(score) >= 10:
-            top_10_indices = np.argsort(score)[::-1][:10]
-            new_score[top_10_indices] = 0.005
+        if np.max(top_scores) == np.min(top_scores):
+            # All scores equal - distribute evenly but respect min/max
+            # Check if even distribution is possible within bounds
+            even_value = 1.0 / n
+            if even_value < 0.009 or even_value > 0.017:
+                a = 0.009
+                b = 0.017
+                indices = np.arange(n)
+                scaled_values = a + (indices / (n - 1)) * (b - a)
+                # Adjust to make sum exactly 1
+                current_sum = np.sum(scaled_values)
+                scaled_values = scaled_values * (1.0 / current_sum)
+            else:
+                scaled_values = np.full(n, even_value)
         else:
-            new_score[:] = 0.005
-        
-        return new_score
+            # Scale scores to [0.009, 0.017] range
+            min_score = np.min(top_scores)
+            max_score = np.max(top_scores)
+            
+            # Initial linear scaling to [0.009, 0.017]
+            scaled_values = 0.009 + (top_scores - min_score) / (max_score - min_score) * (0.017 - 0.009)       
+            # Keep min and max fixed, adjust intermediate values
+            current_sum = np.sum(scaled_values)
+            target_sum = 1.0
+            
+            if current_sum != target_sum:
+                # Adjust only the intermediate values (not min or max)
+                min_idx = np.argmin(top_scores)
+                max_idx = np.argmax(top_scores)
+                
+                # Sum of min + max
+                min_max_sum = scaled_values[min_idx] + scaled_values[max_idx]
+                
+                # Sum needed from remaining n-2 values
+                remaining_target = target_sum - min_max_sum
+                remaining_current = current_sum - min_max_sum
+                
+                if remaining_current != 0:
+                    # Scale only the intermediate values
+                    intermediate_indices = [i for i in range(n) if i not in [min_idx, max_idx]]
+                    scale_factor = remaining_target / remaining_current
+                    for idx in intermediate_indices:
+                        scaled_values[idx] *= scale_factor
+    
+    # Assign scaled values back to the strategy array
+    strat[top_indices] = scaled_values
+    
+    return strat
     
 def calculate_division(close_time, asset, flag):
     if asset == 1:
@@ -682,7 +683,7 @@ def calculate_division(close_time, asset, flag):
                 sc = 0.3 * flow_score[i] + 0.3 * momentum_score[i] + 0.4 * tao_flow_score[i]
                 score.append(sc)
 
-        strat = generate_staking_strat_by_score(score, flag)
+        strat = generate_staking_strat_by_score(score)
 
         for i in range(len(strat)):
             strat[i] = math.floor(strat[i] * 10**12) / 10**12
