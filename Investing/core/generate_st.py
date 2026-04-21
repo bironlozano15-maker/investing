@@ -7,7 +7,8 @@ import requests
 import time, json, os
 import sqlalchemy as sql
 from Investing.core.simst import cd
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
+from Investing.core.compare_strategies import calculate_difference_score
 
 def fetchda(asset):
     db = f'{cd}/db/daily{asset or ""}.db'
@@ -30,20 +31,30 @@ def fetchda(asset):
     df.to_sql('bndaily', conn, if_exists='append', index=False)
     conn.commit()
 
-def generate_strat(start_time, asset, flag):
+def generate_strat(start_time, asset):
     fetchda(ASSET)
+    strat = calculate_division(start_time, asset)
 
-    strat = calculate_division(start_time, asset, flag)
-    
-    if asset == 0:
+    if not os.path.isfile(STAKING_STRATEGY_PATH):
         with open(STAKING_STRATEGY_PATH, 'w') as file:
             file.write(strat)
+        with open(STAKING_STRATEGY_UPDATE_TIME, 'w') as file:
+            file.write(str(start_time))
     else:
-        with open(STOCKS_STRATEGY_PATH, 'w') as file:
-            file.write(str(strat))
+        with open(STAKING_STRATEGY_PATH, 'r') as file:
+            past_strat = file.read()
+        with open(STAKING_STRATEGY_UPDATE_TIME, 'r') as file:
+            past_generate_time = file.read()
+        past_generate_time = datetime.fromisoformat(past_generate_time)
+        difference_score = calculate_difference_score(past_generate_time, start_time, past_strat, strat)
+        if difference_score >= 0.55:
+            current_strat = strat
+            with open(STAKING_STRATEGY_PATH, 'w') as file:
+                file.write(current_strat)
+            with open(STAKING_STRATEGY_UPDATE_TIME, 'w') as file:
+                file.write(str(start_time))
 
-    print("Generated new strategy at", datetime.now(timezone.utc).replace(microsecond=0), "asset=", asset, "flag =", flag)
-
+    print("Generated new strategy at", datetime.now(timezone.utc).replace(microsecond=0), "asset=", asset)
     return strat
 
 def fetch_data():

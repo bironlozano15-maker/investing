@@ -6,6 +6,7 @@ RAO_PER_UNIT = Decimal("1000000000")
 
 AN = 2
 STAKING_HOTKEY = "5F1xUaixHnpfyqUj77YHEDPNssYkyZwd2T7wdGCVtJ8U7a9o"
+STAKING_UPDATE_TIME = "update_time"
 STOCKS_HOTKEY = "5Ccq57P5jtBKzgKDRPkxMViJrJSDyCWDcqkkpbxsKDMJbJcP"
 FILE_NAME = "tao_pyth_1min"
 STAKING_UID = 85
@@ -17,6 +18,7 @@ BLOCK_SECONDS = 12
 
 STAKING_STRATEGY_PATH = 'Investing/strat/{}'.format(STAKING_HOTKEY)
 STAKING_STRATEGY_PATH_CSV = 'Investing/strat/{}.csv'.format(STAKING_HOTKEY)
+STAKING_STRATEGY_UPDATE_TIME = 'Investing/strat/{}'.format(STAKING_UPDATE_TIME)
 STOCKS_STRATEGY_PATH = 'Investing/strat/{}'.format(STOCKS_HOTKEY)
 STOCKS_STRATEGY_PATH_CSV = 'Investing/strat/{}.csv'.format(STOCKS_HOTKEY)
 DATA_NAME = "data.csv"
