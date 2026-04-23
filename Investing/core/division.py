@@ -479,8 +479,23 @@ def calculate_probability(db, close_time):
             p_current = alpha_prices[t][subnet]
             p_next = alpha_prices[t-1][subnet]
             daily_returns[subnet].append((p_next - p_current) / p_current)
-    daily_returns = np.array(daily_returns) 
+    daily_returns = np.array(daily_returns)
 
+
+    # last_2_days = daily_returns[:, -2:]  # Shape: (128, 2)
+    # variance_last_2 = np.var(last_2_days, axis=1)  # Shape: (128,)
+    # vol_last_2 = np.sqrt(variance_last_2)  # Shape: (128,)
+
+    # variance_30d = np.var(daily_returns, axis=1)  # Shape: (128,)
+    # vol_30d = np.sqrt(variance_30d)  # Shape: (128,)
+
+    # alpha = 0.7  # 70% weight on last 2 days, 30% on 30 days
+    # vol_blended = (alpha * vol_last_2) + ((1 - alpha) * vol_30d)  # Shape: (128,)
+
+    # vol_30d_safe = np.where(vol_30d == 0, 0.0001, vol_30d)
+    # scale_factor = vol_blended / vol_30d_safe  # Shape: (128,)
+    # scale_factor_reshaped = scale_factor.reshape(128, 1)
+    # daily_returns = daily_returns * scale_factor_reshaped  # Shape: (128, 30)
     weights = []
     for i in range(30):
         weight = 1 + (i / 29) * 2
@@ -488,6 +503,15 @@ def calculate_probability(db, close_time):
     weights = np.array(weights)
     total_weight = np.sum(weights)
     pick_probabilities = weights / total_weight
+    # lambda_decay = 0.03
+    # weights = []
+    # for i in range(30):
+    #     # i=0 (oldest) gets smallest weight, i=29 (newest) gets largest
+    #     weight = np.exp(lambda_decay * i)
+    #     weights.append(weight)
+    # weights = np.array(weights)
+    # total_weight = np.sum(weights)
+    # pick_probabilities = weights / total_weight
 
     probabilities = []
     for subnet_idx in range(128):
@@ -590,7 +614,7 @@ def calculate_division(close_time, asset):
         for subnet_num in remove_subnet:
             index = subnet_num - 1
             probability_score[index] = 0
-        probability_score = [p if p >= 0.5 else 0 for p in probability_score]
+        probability_score = [p if 0.5 <= p <= 0.9 else 0 for p in probability_score]
         total_score = sum(probability_score)
         if total_score > 0:
             strat = [p / total_score for p in probability_score]
