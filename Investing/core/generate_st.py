@@ -62,3 +62,9 @@ def generate_strat(start_time, asset):
 def fetch_data():
     rows = fetch_alpha_prices()
     append_rows_to_csv(rows, DATA_NAME)
+
+    df = pd.read_csv(DATA_NAME)
+    df['date'] = pd.to_datetime(df['date'])
+    df = df[df['date'] > (pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=7))]
+    df.to_csv(DATA_NAME, index=False)
+    
