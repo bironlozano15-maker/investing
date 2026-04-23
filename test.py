@@ -64,8 +64,13 @@ def calculate_score(save_directory, end, fund):
 
 def test():
     signal = 0
-    start_time = datetime(2026, 3, 11, 0, 12, 23)
-    end_time = datetime(2026, 4, 7, 7, 23, 8)
+    start_time = datetime(2026, 3, 20, 0, 0, 1)
+    end_time = datetime(2026, 4, 20, 23, 59, 59)
+
+    for file in ['result.csv', 'result1.csv', STAKING_STRATEGY_UPDATE_TIME, STAKING_STRATEGY_PATH]:
+        if os.path.exists(file):
+            os.remove(file)
+
     if ASSET == 0:
         fund = STAKING_FUND
         hotkey = STAKING_HOTKEY
@@ -82,23 +87,21 @@ def test():
         # NEW: Generate 1-hour interval checkpoints
         checkpoints = []
         current = start_time
-        past_generate_time = start_time
         while current <= end_time:
             checkpoints.append(current)
             current += timedelta(hours=12)
 
         strat_times = []
+        strats = []
         for checkpoint in checkpoints:
             if checkpoint == start_time:
                 strat_times.append(checkpoint)
+                strats.append(current_strategy)
             else:
                 checkpoint_strategy = generate_strat(checkpoint, ASSET)
-                difference_score = calculate_difference_score(past_generate_time, checkpoint, current_strategy, checkpoint_strategy)
-                if difference_score >= 0.55:
-                    current_strategy = checkpoint_strategy
-                    past_generate_time = checkpoint
+                if checkpoint_strategy is not None:
+                    strats.append(checkpoint_strategy)
                     strat_times.append(checkpoint)
-        print(strat_times)
     else:
         strategy = pd.read_csv("last10.csv")
         strategy['datetime'] = pd.to_datetime(strategy['date'] + ' ' + strategy['time'])
@@ -114,12 +117,13 @@ def test():
             (strategy['datetime'] <= largest_before_end)
         ]['datetime'].tolist()
 
-    for i, strat_time in enumerate(strat_times):
+        strats = strategy[
+            (strategy['datetime'] >= largest_before_start) & 
+            (strategy['datetime'] <= largest_before_end)
+        ]['strat'].tolist()
+
+    for i, (strat_time, strat) in enumerate(zip(strat_times, strats)):
         start = max(start_time, strat_time)
-        if signal == 0:
-            strat = generate_strat(strat_time, ASSET)
-        else:
-            strat = strategy[strategy['datetime'] == strat_time]['strat'].values[0]
         new_row = pd.DataFrame([[uid, hotkey, start.date(), start.time(), 
                         datetime_to_blocks(start), fund, strat]], 
                         columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])

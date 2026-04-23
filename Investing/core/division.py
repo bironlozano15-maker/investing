@@ -601,7 +601,7 @@ def calculate_division(close_time, asset):
         db = pd.DataFrame(db)
         columns_to_keep = ['date', 'block', 'netuid', 'alpha_in', 'tao_in', 'price']
         db = db[columns_to_keep]
-        db_data = pd.read_csv("data.csv")
+        db_data = pd.read_csv(DATA_NAME)
         db_data['date'] = pd.to_datetime(db_data['date']).dt.strftime('%Y-%m-%d')
         close_block = datetime_to_blocks(close_time)
         max_block_db = db['block'].max()

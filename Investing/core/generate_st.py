@@ -40,6 +40,7 @@ def generate_strat(start_time, asset):
             file.write(strat)
         with open(STAKING_STRATEGY_UPDATE_TIME, 'w') as file:
             file.write(str(start_time))
+        return strat
     else:
         with open(STAKING_STRATEGY_PATH, 'r') as file:
             past_strat = file.read()
@@ -53,9 +54,10 @@ def generate_strat(start_time, asset):
                 file.write(current_strat)
             with open(STAKING_STRATEGY_UPDATE_TIME, 'w') as file:
                 file.write(str(start_time))
-
-    print("Generated new strategy at", datetime.now(timezone.utc).replace(microsecond=0), "asset=", asset)
-    return strat
+            print("Generated new strategy at", datetime.now(timezone.utc).replace(microsecond=0), "asset=", asset)
+            return strat
+        else:
+            return None
 
 def fetch_data():
     rows = fetch_alpha_prices()
