@@ -64,8 +64,8 @@ def calculate_score(save_directory, end, fund):
 
 def test():
     signal = 0
-    start_time = datetime(2026, 3, 20, 0, 0, 1)
-    end_time = datetime(2026, 4, 20, 23, 59, 59)
+    start_time = datetime(2026, 3, 11, 0, 12, 23)
+    end_time = datetime(2026, 4, 7, 7, 23, 8)
 
     for file in ['result.csv', 'result1.csv', STAKING_STRATEGY_UPDATE_TIME, STAKING_STRATEGY_PATH]:
         if os.path.exists(file):
@@ -83,25 +83,21 @@ def test():
         save_directory = STOCKS_STRATEGY_PATH_CSV
 
     if signal == 0:
-        current_strategy = generate_strat(start_time, ASSET)
         # NEW: Generate 1-hour interval checkpoints
         checkpoints = []
         current = start_time
         while current <= end_time:
             checkpoints.append(current)
-            current += timedelta(hours=12)
+            current += timedelta(hours=1)
 
         strat_times = []
         strats = []
         for checkpoint in checkpoints:
-            if checkpoint == start_time:
+            checkpoint_strategy = generate_strat(checkpoint, ASSET)
+            if checkpoint_strategy is not None:
+                strats.append(checkpoint_strategy)
                 strat_times.append(checkpoint)
-                strats.append(current_strategy)
-            else:
-                checkpoint_strategy = generate_strat(checkpoint, ASSET)
-                if checkpoint_strategy is not None:
-                    strats.append(checkpoint_strategy)
-                    strat_times.append(checkpoint)
+        print(strat_times)
     else:
         strategy = pd.read_csv("last10.csv")
         strategy['datetime'] = pd.to_datetime(strategy['date'] + ' ' + strategy['time'])

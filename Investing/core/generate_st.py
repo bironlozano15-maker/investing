@@ -49,9 +49,8 @@ def generate_strat(start_time, asset):
         past_generate_time = datetime.fromisoformat(past_generate_time)
         difference_score = calculate_difference_score(past_generate_time, start_time, past_strat, strat)
         if difference_score >= 0.55:
-            current_strat = strat
             with open(STAKING_STRATEGY_PATH, 'w') as file:
-                file.write(current_strat)
+                file.write(strat)
             with open(STAKING_STRATEGY_UPDATE_TIME, 'w') as file:
                 file.write(str(start_time))
             print("Generated new strategy at", datetime.now(timezone.utc).replace(microsecond=0), "asset=", asset)
@@ -67,4 +66,3 @@ def fetch_data():
     df['date'] = pd.to_datetime(df['date'])
     df = df[df['date'] > (pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=7))]
     df.to_csv(DATA_NAME, index=False)
-    
