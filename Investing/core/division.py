@@ -4,10 +4,14 @@ from Investing.core.define import *
 import sqlite3
 import json
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 
 def datetime_to_blocks(close_time) -> int:
-    base_dt = datetime.strptime(BASE_TIME_STR, '%Y-%m-%d %H:%M:%S')
+    if close_time.tzinfo is None:
+        close_time = close_time.replace(tzinfo=timezone.utc)
+    else:
+        close_time = close_time.astimezone(timezone.utc)
+    base_dt = datetime.strptime(BASE_TIME_STR, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
     delta_sec = (close_time - base_dt).total_seconds()
     return int(BASE_BLOCK + delta_sec // BLOCK_SECONDS)
 
@@ -419,7 +423,12 @@ def calculate_remove_subnet(db, close_time):
     start_block = datetime_to_blocks(start_time)
     close_block = datetime_to_blocks(close_time)
 
-    df = df[(df['block'] >= start_block) & (df['block'] <= close_block)]
+    for block_value in df['block']:
+        if block_value > start_block:
+            df = df[(df['block'] >= start_block) & (df['block'] <= close_block)]
+        else:
+            close_block = df['block'].max()
+            start_block = float(close_block) - 300
     df = df.sort_values(['netuid', 'block'])
     alpha_in_start = df.groupby('netuid')['alpha_in'].first().values
     alpha_in_close = df.groupby('netuid')['alpha_in'].last().values
