@@ -1,9 +1,6 @@
-import argparse
-import csv
-import json
 from datetime import datetime, timezone
 from pathlib import Path
-import requests
+import requests, json, csv
 from Investing.core.define import *
 
 def convert_raw_amount(raw_value):

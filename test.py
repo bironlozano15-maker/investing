@@ -1,76 +1,89 @@
-from datetime import datetime, timedelta
-import os
-import pandas as pd
+from Investing.core.const import *
+from Investing.core.derived_simst import *
 from Investing.core.define import *
-from Investing.core.generate_st import generate_strat
-from Investing.core.simst import SimSt
-from Investing.core.compare_strategies import calculate_difference_score
+from Investing.core.generate import generate_strat
+from datetime import datetime, timedelta
+import pandas as pd
+import sqlite3, math
 
-def datetime_to_blocks(close_time) -> int:
-    base_dt = datetime.strptime(BASE_TIME_STR, '%Y-%m-%d %H:%M:%S')
-    delta_sec = (close_time - base_dt).total_seconds()
-    return int(BASE_BLOCK + delta_sec // BLOCK_SECONDS)
+def fetch_from_top_strategy(start, end):
+    strategy = pd.read_csv(TOP_STRATEGY)
+    strategy['datetime'] = pd.to_datetime(strategy['date'] + ' ' + strategy['time'])
+    strategy['datetime'] = strategy['datetime'].dt.tz_localize(None)
+    largest_before_start = strategy[strategy['datetime'] <= start]['datetime'].max()
+    largest_before_end = strategy[strategy['datetime'] < end]['datetime'].max()
 
-def calculate_score(save_directory, end, fund):
-    csv, fund, end, clip, win = (
-        os.path.join(save_directory),
-        fund,
-        end,
-        2,
-        30
-    )
+    strat_times = strategy[
+        (strategy['datetime'] >= largest_before_start) & 
+        (strategy['datetime'] <= largest_before_end)
+    ]['datetime'].tolist()
+    strats = strategy[
+        (strategy['datetime'] >= largest_before_start) & 
+        (strategy['datetime'] <= largest_before_end)
+    ]['strat'].tolist()
+    return strat_times, strats
 
-    sim = SimSt(pd.read_csv(csv))
-    if fund: sim.fi['fund'] = fund
-    if clip >= 0: sim.clip_outliers = clip
-    if win: sim.win_size = [win] * AN
-    if end:
-        sim.db[:AN] = [bn[pd.to_datetime(bn['date']) <= end] if len(bn) else bn for bn in sim.db[:AN]]
-    dates = sorted(set([d for bn in sim.db[:AN] if len(bn) for d in bn['date'].values]))
-    for date in dates:
-        sim.pldaily(date, end)
-        sim.pldaily1(date, end)
-        pl = sim.plfinal()
-        for i in range(1, len(pl)):
-            value_close = pl.iloc[i]['value_close']
-            swap_close = pl.iloc[i]['swap_close']
-            if value_close - swap_close > 50:
-                prev_swap = pl.iloc[i-1]['swap_close']
-                prev_value = pl.iloc[i-1]['value_close']
-                current_swap = pl.iloc[i]['swap_close']
-                new_value = current_swap + (prev_value - prev_swap)
-                pl.iloc[i, pl.columns.get_loc('value_close')] = new_value
-        sim.pl = pl
-    sim.pl2sc()
-    if sim.pnl_dir:
-        os.makedirs(sim.pnl_dir, exist_ok=True)
-        sim.pl.to_csv(os.path.join(sim.pnl_dir, f'PnL_{os.path.basename(csv)}'))
-    if not len(sim.sc): return
-    print(f'clip outlier days: {sim.clip_outliers}, rolling window days: {sim.win_size}')
-    print(sim.sc2pct().to_string(index=False))
-    swap = (sim.sc2pct().swap.values[0])
-    value = (sim.sc2pct().value.values[0])
-    if float(value) - float(swap) > 50:
-        pl = sim.pl
-        prev_row = pl.iloc[-2]
-        prev_diff = prev_row['value_close'] - prev_row['swap_close']
-        value = float(swap) + prev_diff
-    fund = float(value)
-    if not os.path.exists('result.csv'):
-        pl.to_csv('result.csv', index=False, header=True)  # Write headers first time
+def load_data(asset):
+    if asset == 1:
+        conn = sqlite3.connect(r'Investing/core/db/daily1.db')
     else:
-        pl.to_csv('result.csv', mode='a', index=False, header=False)  # No headers when appending
-    return value
+        conn = sqlite3.connect(r'Investing/core/db/daily.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM bndaily")
+    rows = cursor.fetchall()
+    conn.close()
+    # Reorganize data: column_name -> list of all values in that column
+    db = {}
+    if rows:
+        # Get all column names
+        columns = rows[0].keys()
+        # For each column, collect all values
+        for col in columns:
+            db[col] = [row[col] for row in rows]
+    return db
 
-def test():
-    signal = 0
-    start_time = datetime(2026, 3, 11, 0, 12, 23)
-    end_time = datetime(2026, 4, 7, 7, 23, 8)
+def datetime_to_blocks(time, db):
+    base_time = time.replace(hour=0, minute=0, second=0, microsecond=0)
+    db['date'] = pd.to_datetime(db['date'], format='%Y-%m-%d', errors='coerce')
+    db = db.dropna(subset=['date'])
+    yesterday = pd.Timestamp(time.date() - timedelta(days=1))
+    filtered = db[(db['date'].dt.date == yesterday.date()) & (db['netuid'] == 0)]
+    base_block = filtered['block'].iat[-1]
+    delta_time = (time - base_time).total_seconds()
+    block = base_block + delta_time / 12
+    block = math.ceil(block)
+    return block
 
-    for file in ['result.csv', 'result1.csv', STAKING_STRATEGY_UPDATE_TIME, STAKING_STRATEGY_PATH]:
-        if os.path.exists(file):
-            os.remove(file)
-
+def main():
+    db = load_data(ASSET)
+    db = pd.DataFrame(db)
+    #set the start_time, end_time
+    start = datetime(2026, 4, 10, 2, 35, 20)
+    end = datetime(2026, 4, 29, 0, 21, 17)
+    end_block = datetime_to_blocks(end, db)
+    #delete the past strat
+    if os.path.exists(STAKING_STRATEGY_PATH):
+        os.remove(STAKING_STRATEGY_PATH)
+    #calculate the strat_times and strats
+    #if signal=1, this is top miner and if signal=0, this is my strategy
+    if SIGNAL == 1:
+        strat_times, strats = fetch_from_top_strategy(start, end)
+    else:
+        check_point = start
+        check_points = []
+        while check_point < end:
+            check_points.append(check_point)
+            check_point += timedelta(hours=24)
+        strats = []
+        strat_times = []
+        for check_point in check_points:
+            checkpoint_strat = generate_strat(check_point, ASSET)
+            if checkpoint_strat is not None:
+                print(check_point)
+                strats.append(checkpoint_strat)
+                strat_times.append(check_point)
+    #if ASSET = 0, this is staking. if ASSET = 1, this is stocks.
     if ASSET == 0:
         fund = STAKING_FUND
         hotkey = STAKING_HOTKEY
@@ -81,72 +94,40 @@ def test():
         hotkey = STOCKS_HOTKEY
         uid = STOCKS_UID
         save_directory = STOCKS_STRATEGY_PATH_CSV
-
-    if signal == 0:
-        # NEW: Generate 1-hour interval checkpoints
-        checkpoints = []
-        current = start_time
-        while current <= end_time:
-            checkpoints.append(current)
-            current += timedelta(hours=1)
-
-        strat_times = []
-        strats = []
-        for checkpoint in checkpoints:
-            checkpoint_strategy = generate_strat(checkpoint, ASSET)
-            if checkpoint_strategy is not None:
-                strats.append(checkpoint_strategy)
-                strat_times.append(checkpoint)
-        print(strat_times)
-    else:
-        strategy = pd.read_csv("last10.csv")
-        strategy['datetime'] = pd.to_datetime(strategy['date'] + ' ' + strategy['time'])
-        strategy['datetime'] = strategy['datetime'].dt.tz_localize(None)
-
-        times_before_start = strategy[strategy['datetime'] <= start_time]['datetime']
-        times_before_end = strategy[strategy['datetime'] < end_time]['datetime']
-        largest_before_start = times_before_start.max()
-        largest_before_end = times_before_end.max()
-
-        strat_times = strategy[
-            (strategy['datetime'] >= largest_before_start) & 
-            (strategy['datetime'] <= largest_before_end)
-        ]['datetime'].tolist()
-
-        strats = strategy[
-            (strategy['datetime'] >= largest_before_start) & 
-            (strategy['datetime'] <= largest_before_end)
-        ]['strat'].tolist()
-
+    
+    csv, fund, end, clip, win = (
+        os.path.join(save_directory),
+        fund,
+        end,
+        CLIP_OUTLIERS,
+        WIN_SIZE_DTAO
+    )
+    #generate the strategy csv file.
+    file_exists = os.path.isfile(save_directory)
     for i, (strat_time, strat) in enumerate(zip(strat_times, strats)):
-        start = max(start_time, strat_time)
-        new_row = pd.DataFrame([[uid, hotkey, start.date(), start.time(), 
-                        datetime_to_blocks(start), fund, strat]], 
-                        columns=['uid', 'hotkey', 'date', 'time', 'block', 'fund', 'strat'])
-                            
-        new_row.to_csv(save_directory, index=False)
+        strat_time_block = datetime_to_blocks(strat_time, db)
+        new_row = pd.DataFrame([[uid, hotkey, strat_time.date(), strat_time_block, fund, strat]], 
+                    columns=['uid', 'hotkey', 'date', 'block', 'fund', 'strat'])
+        new_row.to_csv(save_directory, mode='a', header=(not file_exists and i == 0), index=False)
+    #calculate the score
+    sim = SimSt(pd.read_csv(csv))
+    if fund: sim.fi['fund'] = fund
+    if clip >= 0: sim.clip_outliers = clip
+    if win: sim.win_size = [win] * an
+    if end:
+        sim.db[:an] = [bn[bn['block'] <= end_block] if len(bn) else bn for bn in sim.db[:an]]
+    dates = sorted(set([d for bn in sim.db[:an] if len(bn) for d in bn['date'].values]))
+    for date in dates:
+        sim.pldaily(date)
+        sim.pldaily1(date)
+        sim.plfinal()
+    sim.pl2sc()
+    if sim.pnl_dir:
+        os.makedirs(sim.pnl_dir, exist_ok=True)
+        output_path = os.path.join(sim.pnl_dir, f'PnL_{os.path.basename(csv)}')
+        sim.pl.to_csv(output_path)
+    if not len(sim.sc): return
+    print(sim.sc2pct().to_string(index=False))
+    os.remove(save_directory)
 
-        if i + 1 < len(strat_times):
-            end = min(strat_times[i+1], end_time)
-            value = calculate_score(save_directory, end, fund)
-        else:
-            end = end_time
-            value = calculate_score(save_directory, end, fund)
-            df = pd.read_csv('result.csv')
-            # Convert date to datetime and sort
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.sort_values('date')
-            # Get first value_open for each day (remove duplicate dates)
-            daily_open = df.groupby('date')['value_open'].first().reset_index()
-            daily_open.columns = ['date', 'open']
-            value = float(value)
-            # Get open values for next day as close
-            daily_open['close'] = daily_open['open'].shift(-1)
-            # Fill the last empty close value with swap
-            daily_open.loc[daily_open.index[-1], 'close'] = value
-            # Save to result1.csv
-            daily_open.to_csv('result1.csv', index=False)
-            os.remove(save_directory)
-        fund = float(value)
-
-if __name__ == "__main__": test()
+if __name__ == "__main__": main()

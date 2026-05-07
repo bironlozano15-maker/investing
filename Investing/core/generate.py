@@ -7,8 +7,6 @@ import requests
 import time, json, os
 import sqlalchemy as sql
 from Investing.core.simst import cd
-from datetime import datetime, timezone
-from Investing.core.compare_strategies import calculate_difference_score
 
 def fetchda(asset):
     db = f'{cd}/db/daily{asset or ""}.db'
@@ -31,29 +29,41 @@ def fetchda(asset):
     df.to_sql('bndaily', conn, if_exists='append', index=False)
     conn.commit()
 
+def calculate_compare_score(past_strat, strat):
+    import ast
+    # Convert string to dict if needed
+    if isinstance(past_strat, str):
+        past_strat = ast.literal_eval(past_strat)
+    if isinstance(strat, str):
+        strat = ast.literal_eval(strat)
+    # Get netuid sets
+    past_keys = set(past_strat.keys())
+    current_keys = set(strat.keys()) 
+    # Count matching netuids
+    matching = len(past_keys & current_keys)
+    # Total netuids in past strategy
+    total = len(past_keys)
+    # Avoid division by zero
+    if total == 0:
+        return 0
+    # Calculate score
+    score = matching / total
+    return score
+
 def generate_strat(start_time, asset):
     fetchda(ASSET)
     strat = calculate_division(start_time, asset)
-
     if not os.path.isfile(STAKING_STRATEGY_PATH):
         with open(STAKING_STRATEGY_PATH, 'w') as file:
             file.write(strat)
-        with open(STAKING_STRATEGY_UPDATE_TIME, 'w') as file:
-            file.write(str(start_time))
         return strat
     else:
         with open(STAKING_STRATEGY_PATH, 'r') as file:
             past_strat = file.read()
-        with open(STAKING_STRATEGY_UPDATE_TIME, 'r') as file:
-            past_generate_time = file.read()
-        past_generate_time = datetime.fromisoformat(past_generate_time)
-        difference_score = calculate_difference_score(past_generate_time, start_time, past_strat, strat)
-        if difference_score >= 0.55:
+        compare_strat = calculate_compare_score(past_strat, strat)
+        if compare_strat <= 0.6:
             with open(STAKING_STRATEGY_PATH, 'w') as file:
                 file.write(strat)
-            with open(STAKING_STRATEGY_UPDATE_TIME, 'w') as file:
-                file.write(str(start_time))
-            print("Generated new strategy at", datetime.now(timezone.utc).replace(microsecond=0), "asset=", asset)
             return strat
         else:
             return None

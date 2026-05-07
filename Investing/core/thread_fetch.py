@@ -1,4 +1,4 @@
-from Investing.core.generate_st import fetch_data
+from Investing.core.generate import fetch_data
 import time
 from datetime import datetime, timezone
 

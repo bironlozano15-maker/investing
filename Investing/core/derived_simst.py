@@ -52,7 +52,7 @@ Decentralized AUM. Please visit:
 https://github.com/mobiusfund/investing
 '''
 
-import os, sys, time
+import os, sys, time, ast
 import json, requests
 import numpy as np
 import pandas as pd
@@ -106,7 +106,7 @@ def ddclean1(dd, b):
 def fetchda(self, a):
     if a not in asst(self.st): return pd.DataFrame()
     st = self.st
-    date = st['date'].min()
+    block = st['block'].min()
     db = f'{cd}/db/daily{a or ""}.db'
     conn = sql.create_engine(f'sqlite:///{db}').connect()
     if not os.path.getsize(db):
@@ -115,7 +115,7 @@ def fetchda(self, a):
     last = bn['date'].iat[-1] if len(bn) > 1 else FIRST_DATE
     late = [7200, 28800]
     if last >= time.strftime('%F', time.gmtime(time.time() - 86400 - late[a])) or self.no_fetch:
-        return bn[bn['date'] >= date]
+        return bn[bn['block'] >= block]
 
     print(f'Fetching {db.split("/")[-1]}, begin {last}...', end='', flush=True)
     try: r, e = json.loads(requests.get(f'{API_ROOT}/daily{a or ""}/{last}').json()), 'done'
@@ -126,7 +126,7 @@ def fetchda(self, a):
     print(f" {e}, end {bn['date'].iat[-1] if len(bn) > 1 else last}.")
     df.to_sql('bndaily', conn, if_exists='append', index=False)
     conn.commit()
-    return bn[bn['date'] >= date]
+    return bn[bn['block'] >= block]
 
 def fetchdb(self):
     if not len(self.st): return [pd.DataFrame()] * an
@@ -168,7 +168,8 @@ def initfund(self):
         bn = self.db[anum]
         if not len(bn): continue
         date = max(bn['date'].iat[0], di['date'])
-        block = bn[bn['date'] >= date]['block'].iat[0] if notin else di['block']
+        filtered = bn[(bn['block'] >= di['block']) & (bn['ochl'] == 'hour')]
+        block = filtered['block'].iloc[0]
         init = int(uid not in fi['uid'].values) if notin else di['init']
         hk = '' if 'hotkey' not in st else di['hotkey']
         fi.loc[len(fi)] = uid, hk, date, block, init, *di[['fund', 'strat']], anum
@@ -205,12 +206,12 @@ def pldaily(self, date, a=0):
     nn = pd.concat([ba[kn], fa[kn]]).drop_duplicates().sort_values(kn).reset_index()
     dn = pd.concat([bn[bn['date'] == date], rv[rv['date'] == date]])
     ba, fa = ba.set_index(kn).sort_index(), fa.set_index(kb).sort_index()
-
+    
     alpha0k = {}
     dg = pd.DataFrame()
     for i in nn.index:
         uid, hk, netuid = key = tuple(nn.loc[i,kn])
-        blk = bb[(bb['uid'] == uid) & (bb['hotkey'] == hk)]['block']
+        blk = bb[(bb['uid'] == uid) & (bb['hotkey'] == hk)]['block'] #block that allow the strategy
         dd = ddclean(dn[dn['netuid'] == netuid])
         dd = dd[(dd['ochl'] != 'rv') | dd['block'].isin(blk)]
         if not len(dd): continue
@@ -429,10 +430,10 @@ def pl2sc(self):
         date, a, days = dd['date'].iat[-1], dd['asset'].iat[0], len(dd)
         dd = dd[-self.win_size[a]:].reset_index(drop=True)
         init = dd['swap_open'].iat[0]
-        dd['pnl'] = dd['swap_close'].diff()
-        dd['pnl%'] = dd['pnl'] / dd['swap_close'].shift() * 100
-        dd['pnl'].iat[0] = dd['swap_close'].iat[0] - init
-        dd['pnl%'].iat[0] = dd['pnl'].iat[0] / init * 100
+        dd.loc[dd.index[0], 'pnl'] = dd['swap_close'].iat[0] - init
+        dd.loc[dd.index[0], 'pnl%'] = dd['pnl'].iat[0] / init * 100
+        dd.iloc[0, dd.columns.get_loc('pnl')] = dd['swap_close'].iat[0] - init
+        dd.iloc[0, dd.columns.get_loc('pnl%')] = dd['pnl'].iat[0] / init * 100
 
         ii = dd[dd['pnl%'] > 0].sort_values('pnl%')[::-1][:self.clip_outliers + 1].index
         if len(ii) == 0: clip = 0
@@ -530,27 +531,6 @@ def args():
         exit(1)
     return csv, a.fund, a.end, a.clip, a.win
 
-def main():
-    csv, fund, end, clip, win = args()
-    sim = SimSt(pd.read_csv(csv))
-    if fund: sim.fi['fund'] = fund
-    if clip >= 0: sim.clip_outliers = clip
-    if win: sim.win_size = [win] * an
-    if end:
-        sim.db[:an] = [bn[bn['date'] <= end] if len(bn) else bn for bn in sim.db[:an]]
-    dates = sorted(set([d for bn in sim.db[:an] if len(bn) for d in bn['date'].values]))
-    for date in dates:
-        print(date, end='', flush=True)
-        sim.pldaily(date)
-        sim.pldaily1(date)
-        sim.plfinal()
-        print(', ' if date < dates[-1] else '.\n', end='', flush=True)
-    sim.pl2sc()
-    if sim.pnl_dir: sim.pl.to_csv(f'{sim.pnl_dir}/PnL_{os.path.basename(csv)}')
-    if not len(sim.sc): return
-    print(f'clip outlier days: {sim.clip_outliers}, rolling window days: {sim.win_size}')
-    print(sim.sc2pct().to_string(index=False))
-
 def concat(ls, *kv, **kw):
     ds = [df for df in ls if len(df)]
     return _concat(ds, *kv, **kw) if len(ds) else ls[0].copy()
@@ -591,4 +571,4 @@ SimSt.win_size = []
 SimSt.win_size += [int(os.getenv('SIMST_WIN_SIZE_DTAO', WIN_SIZE_DTAO))]
 SimSt.win_size += [int(os.getenv('SIMST_WIN_SIZE_STK', WIN_SIZE_STK))]
 
-if __name__ == "__main__": main()
+
