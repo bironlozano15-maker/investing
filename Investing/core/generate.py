@@ -66,8 +66,8 @@ def generate_strat(start_time, asset, raw_db = None):
             with open(STAKING_STRATEGY_PATH, 'w') as file:
                 file.write(strat)
             return strat
-        else:
-            return None
+
+    return None
 
 def fetch_data():
     rows = fetch_alpha_prices()

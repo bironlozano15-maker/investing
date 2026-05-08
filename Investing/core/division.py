@@ -30,8 +30,7 @@ def load_data(asset):
     db = {}
     if rows:
         # Get all column names
-        columns = rows[0].keys()
-        
+        columns = rows[0].keys()   
         # For each column, collect all values
         for col in columns:
             db[col] = [row[col] for row in rows]
@@ -94,9 +93,9 @@ def calculate_probability(db, close_time):
 
     alpha_prices = []
     for i in range(121):
-        df_1d = df[(df['block'] >= start_block) & (df['block'] <= end_block)]
-        df_1d = df_1d.sort_values(['netuid', 'block'])
-        alpha_price = df_1d.groupby('netuid')['price'].mean().values
+        df_1h = df[(df['block'] >= start_block) & (df['block'] <= end_block)]
+        df_1h = df_1h.sort_values(['netuid', 'block'])
+        alpha_price = df_1h.groupby('netuid')['price'].mean().values
         alpha_prices.append(alpha_price)
         start_block = start_block - 300 # 300 blocks is round 1 hour
         end_block = end_block - 300     # 300 blocks is round 1 hour
