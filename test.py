@@ -1,7 +1,7 @@
 from Investing.core.const import *
 from Investing.core.derived_simst import *
 from Investing.core.define import *
-from Investing.core.generate import generate_strat
+from Investing.core.generate import generate_strat, fetchda
 from datetime import datetime, timedelta
 import pandas as pd
 import sqlite3, math
@@ -56,11 +56,12 @@ def datetime_to_blocks(time, db):
     return block
 
 def main():
+    fetchda(ASSET)
     db = load_data(ASSET)
     db = pd.DataFrame(db)
     #set the start_time, end_time
     start = datetime(2026, 4, 10, 2, 35, 20)
-    end = datetime(2026, 4, 29, 0, 21, 17)
+    end = datetime(2026, 4, 13, 0, 21, 17)
     end_block = datetime_to_blocks(end, db)
     #delete the past strat
     if os.path.exists(STAKING_STRATEGY_PATH):
@@ -78,7 +79,7 @@ def main():
         strats = []
         strat_times = []
         for check_point in check_points:
-            checkpoint_strat = generate_strat(check_point, ASSET)
+            checkpoint_strat = generate_strat(check_point, ASSET, db)
             if checkpoint_strat is not None:
                 print(check_point)
                 strats.append(checkpoint_strat)

@@ -50,9 +50,10 @@ def calculate_compare_score(past_strat, strat):
     score = matching / total
     return score
 
-def generate_strat(start_time, asset):
-    fetchda(ASSET)
-    strat = calculate_division(start_time, asset)
+def generate_strat(start_time, asset, raw_db = None):
+    if raw_db is None:
+        fetchda(ASSET)
+    strat = calculate_division(start_time, asset, raw_db)
     if not os.path.isfile(STAKING_STRATEGY_PATH):
         with open(STAKING_STRATEGY_PATH, 'w') as file:
             file.write(strat)

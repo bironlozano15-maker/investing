@@ -87,17 +87,19 @@ def calculate_probability(db, close_time):
     df = df[df['netuid'] != 0]
     df['date'] = pd.to_datetime(df['date'])
 
+    start_time = close_time - pd.Timedelta(hours=1)
+    end_time = close_time - pd.Timedelta(hours=0)
+    start_block = datetime_to_blocks(start_time, db)
+    end_block = datetime_to_blocks(end_time, db)
+
     alpha_prices = []
     for i in range(121):
-        start_time = close_time - pd.Timedelta(hours=i+1)
-        end_time = close_time - pd.Timedelta(hours=i)
-        start_block = datetime_to_blocks(start_time, db)
-        end_block = datetime_to_blocks(end_time, db)
-
         df_1d = df[(df['block'] >= start_block) & (df['block'] <= end_block)]
         df_1d = df_1d.sort_values(['netuid', 'block'])
         alpha_price = df_1d.groupby('netuid')['price'].mean().values
         alpha_prices.append(alpha_price)
+        start_block = start_block - 300 # 300 blocks is round 1 hour
+        end_block = end_block - 300     # 300 blocks is round 1 hour
 
     hourly_returns = [[] for _ in range(128)]
 
@@ -167,9 +169,12 @@ def scale_values(result):
     
     return new_result
 
-def calculate_division(close_time, asset):
+def calculate_division(close_time, asset, raw_db):
     if asset == 0:
-        db = load_data(asset)
+        if raw_db is None:
+            db = load_data(asset)
+        else:
+            db = raw_db.copy()
         db = pd.DataFrame(db)
         columns_to_keep = ['date', 'block', 'netuid', 'alpha_in', 'tao_in', 'price']
         db = db[columns_to_keep]
