@@ -21,7 +21,7 @@ TOP_STRATEGY = 'top_miner.csv'
 DATA_NAME = 'data.csv'
 RAO_PER_UNIT = Decimal("1000000000")
 SOURCE_URL = "https://taostats.io/subnets"
-SIGNAL = 1
+SIGNAL = 0
 
 K_MIN = 40
 K_MAX = 108
