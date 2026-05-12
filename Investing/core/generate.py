@@ -3,6 +3,7 @@ from Investing.core.define import *
 from Investing.core.data_load import fetch_alpha_prices, append_rows_to_csv
 from Investing.core.const import *
 import pandas as pd
+import numpy as np
 import requests
 import time, json, os
 import sqlalchemy as sql
@@ -29,42 +30,48 @@ def fetchda(asset):
     df.to_sql('bndaily', conn, if_exists='append', index=False)
     conn.commit()
 
-def calculate_compare_score(past_strat, strat):
-    import ast
-    # Convert string to dict if needed
-    if isinstance(past_strat, str):
-        past_strat = ast.literal_eval(past_strat)
-    if isinstance(strat, str):
-        strat = ast.literal_eval(strat)
-    # Get netuid sets
-    past_keys = set(past_strat.keys())
-    current_keys = set(strat.keys()) 
-    # Count matching netuids
-    matching = len(past_keys & current_keys)
-    # Total netuids in past strategy
-    total = len(past_keys)
-    # Avoid division by zero
-    if total == 0:
-        return 0
-    # Calculate score
-    score = matching / total
-    return score
+def calculate_compare_score(past_score, score):
+    if isinstance(past_score, str):
+        past_score = np.fromstring(past_score.strip("[]"), sep=" ")
+    past_non_zero = [v for v in past_score if v != 0]
+    past_sorted = sorted(past_non_zero, reverse=True)
+    past_72value = past_sorted[71]
+    past_netuid = []
+    for netuid, value in enumerate(past_score):
+        if value != 0 and value >= past_72value:
+            past_netuid.append(netuid)
+
+    current_non_zero = [v for v in score if v != 0]
+    current_sorted = sorted(current_non_zero, reverse=True)
+    current_72value = current_sorted[71]
+    current_netuid = []
+    for netuid, value in enumerate(score):
+        if value != 0 and value >= current_72value:
+            current_netuid.append(netuid)
+    matching_count = len(set(past_netuid) & set(current_netuid))
+    compare_score = matching_count / 72
+
+    return compare_score
 
 def generate_strat(start_time, asset, raw_db = None):
     if raw_db is None:
         fetchda(ASSET)
-    strat = calculate_division(start_time, asset, raw_db)
+    strat, score = calculate_division(start_time, asset, raw_db)
     if not os.path.isfile(STAKING_STRATEGY_PATH):
         with open(STAKING_STRATEGY_PATH, 'w') as file:
             file.write(strat)
+        with open(SCORE_PATH, 'w') as file:
+            file.write(str(score))
         return strat
     else:
-        with open(STAKING_STRATEGY_PATH, 'r') as file:
-            past_strat = file.read()
-        compare_strat = calculate_compare_score(past_strat, strat)
-        if compare_strat <= 0.6:
+        with open(SCORE_PATH, 'r') as file:
+            past_score = file.read()
+        compare_score = calculate_compare_score(past_score, score)
+        if compare_score <= 0.65:
             with open(STAKING_STRATEGY_PATH, 'w') as file:
                 file.write(strat)
+            with open(SCORE_PATH, 'w') as file:
+                file.write(str(score))
             return strat
 
     return None

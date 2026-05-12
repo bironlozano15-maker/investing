@@ -41,7 +41,7 @@ def calculate_remove_subnet(db, close_time):
     df = df[df['netuid'] != 0]
     df['date'] = pd.to_datetime(df['date'])
 
-    start_time = close_time - pd.Timedelta(hours=1)
+    start_time = close_time - pd.Timedelta(hours=3)
     start_block = datetime_to_blocks(start_time, db)
     close_block = datetime_to_blocks(close_time, db)
 
@@ -104,8 +104,17 @@ def calculate_probability(db, close_time):
 
     for subnet in range(128):
         for t in range(120, 0, -1):
-            p_current = alpha_prices[t][subnet]
-            p_next = alpha_prices[t-1][subnet]
+            try:
+                p_current = alpha_prices[t][subnet]
+            except:
+                p_current = None
+            try:
+                p_next = alpha_prices[t-1][subnet]
+            except:
+                p_next = None
+            if p_current is None or p_next is None:
+                hourly_returns[subnet].append(0)
+                continue
             hourly_returns[subnet].append((p_next - p_current) / p_current)
     hourly_returns = np.array(hourly_returns)
 
@@ -143,10 +152,10 @@ def calculate_probability(db, close_time):
     
     return probability_scores
 
-def scale_values(result):
-    min_val = 0.009
-    max_val = 0.021
-    step = (max_val - min_val) / 65
+def scale_values(result, keep_num):
+    min_val = (1 / keep_num) * 0.6
+    max_val = (1 / keep_num) * 1.4
+    step = (max_val - min_val) / (keep_num - 1)
 
     # Find indices of non-zero values
     indices = [i for i, x in enumerate(result) if x != 0]
@@ -167,6 +176,21 @@ def scale_values(result):
     new_result[indices[-1]] = max_val
     
     return new_result
+
+def calculate_keep_num(count):
+    max_threshold = 0.6 * K_MAX 
+    min_threshold = 0.2 * K_MAX 
+    if count <= min_threshold:
+        keep_num = K_MIN
+    elif count >= max_threshold:
+        keep_num = K_MAX
+    else:
+        keep_num = K_MIN + (count - min_threshold) * (K_MAX - K_MIN) / (max_threshold - min_threshold)
+    keep_num = round(keep_num)
+    if keep_num % 2 != 0:
+        keep_num += 1
+    
+    return keep_num
 
 def calculate_division(close_time, asset, raw_db):
     if asset == 0:
@@ -193,18 +217,20 @@ def calculate_division(close_time, asset, raw_db):
             probability_score[index] = 0
         #maintain 60%
         probability_score = np.array(probability_score)
+        positive_count = sum(1 for x in probability_score if x > 0)
         # 1. get indices of non-zero values
         idx = np.where(probability_score != 0)[0]
         # 2. sort those indices by value (largest → smallest)
         idx = idx[np.argsort(probability_score[idx])[::-1]]
-        # 3. keep top 66
-        keep = idx[:66]
+        # 3. keep top keep_num
+        keep_num = calculate_keep_num(positive_count)
+        keep = idx[:keep_num]
         # 4. create zero array
         result = np.zeros_like(probability_score)
-        # 5. put back only top 66 values
+        # 5. put back only top 72 values
         result[keep] = probability_score[keep]
         #make the strategy
-        strat = scale_values(result)      
+        strat = scale_values(result, keep_num)      
         for i in range(len(strat)):
             strat[i] = math.floor(strat[i] * 10**12) / 10**12
 
@@ -212,4 +238,4 @@ def calculate_division(close_time, asset, raw_db):
         strat_dict = {k: v for k, v in strat_dict.items() if v != 0}
 
         strat_string = str(strat_dict)
-        return strat_string
+        return strat_string, probability_score

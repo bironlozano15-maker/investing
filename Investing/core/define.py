@@ -13,6 +13,7 @@ STOCKS_HOTKEY = "5Ccq57P5jtBKzgKDRPkxMViJrJSDyCWDcqkkpbxsKDMJbJcP"
 
 STAKING_STRATEGY_PATH = 'Investing/strat/{}'.format(STAKING_HOTKEY)
 STOCKS_STRATEGY_PATH = 'Investing/strat/{}'.format(STOCKS_HOTKEY)
+SCORE_PATH = 'Investing/core/tmp/{}'.format("strategy_score")
 STAKING_STRATEGY_PATH_CSV = 'Investing/core/tmp/{}.csv'.format(STAKING_HOTKEY)
 STOCKS_STRATEGY_PATH_CSV = 'Investing/core/tmp/{}.csv'.format(STOCKS_HOTKEY)
 
@@ -20,4 +21,7 @@ TOP_STRATEGY = 'top_miner.csv'
 DATA_NAME = 'data.csv'
 RAO_PER_UNIT = Decimal("1000000000")
 SOURCE_URL = "https://taostats.io/subnets"
-SIGNAL = 0
+SIGNAL = 1
+
+K_MIN = 40
+K_MAX = 108
