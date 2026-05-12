@@ -28,7 +28,6 @@ import template
 # import base miner class which takes care of most of the boilerplate
 from template.base.miner import BaseMinerNeuron
 
-from Investing.core.define import *
 
 class Miner(BaseMinerNeuron):
     """
@@ -166,13 +165,12 @@ class Miner(BaseMinerNeuron):
         )
         return priority
 
+
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
     bt.logging.enable_info()
-
     with Miner() as miner:
         ss58 = miner.wallet.hotkey.ss58_address
-
         step = 0
         while True:
             if etc.isnew(ss58): api.rev(ss58), time.sleep(10)
