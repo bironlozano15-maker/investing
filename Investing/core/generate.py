@@ -57,12 +57,15 @@ def generate_strat(start_time, asset, raw_db = None):
     if raw_db is None:
         fetchda(ASSET)
     strat, score = calculate_division(start_time, asset, raw_db)
+
+    final_strat = None
+
     if not os.path.isfile(STAKING_STRATEGY_PATH):
         with open(STAKING_STRATEGY_PATH, 'w') as file:
             file.write(strat)
         with open(SCORE_PATH, 'w') as file:
             file.write(str(score))
-        return strat
+        final_strat = strat
     else:
         with open(SCORE_PATH, 'r') as file:
             past_score = file.read()
@@ -72,9 +75,12 @@ def generate_strat(start_time, asset, raw_db = None):
                 file.write(strat)
             with open(SCORE_PATH, 'w') as file:
                 file.write(str(score))
-            return strat
+            final_strat = strat
 
-    return None
+    if final_strat is not None:
+        print("generated strategy at", start_time)
+
+    return final_strat
 
 def fetch_data():
     rows = fetch_alpha_prices()

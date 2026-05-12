@@ -50,7 +50,6 @@ def main():
             print(check_point)
             checkpoint_strat = generate_strat(check_point, ASSET, db)
             if checkpoint_strat is not None:
-                print("generated strategy at", check_point)
                 strats.append(checkpoint_strat)
                 strat_times.append(check_point)
     #if ASSET = 0, this is staking. if ASSET = 1, this is stocks.
