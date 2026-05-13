@@ -59,7 +59,7 @@ def generate_strat(start_time, asset, raw_db = None):
     strat, score = calculate_division(start_time, asset, raw_db)
 
     final_strat = None
-
+    os.makedirs(os.path.dirname(SCORE_PATH), exist_ok=True)
     if not os.path.isfile(STAKING_STRATEGY_PATH):
         with open(STAKING_STRATEGY_PATH, 'w') as file:
             file.write(strat)

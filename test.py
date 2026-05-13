@@ -72,6 +72,7 @@ def main():
         WIN_SIZE_DTAO
     )
     #generate the strategy csv file.
+    os.makedirs(os.path.dirname(STAKING_STRATEGY_PATH_CSV), exist_ok=True)
     file_exists = os.path.isfile(save_directory)
     for i, (strat_time, strat) in enumerate(zip(strat_times, strats)):
         strat_time_block = datetime_to_blocks(strat_time, db)
