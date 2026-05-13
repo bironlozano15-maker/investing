@@ -203,10 +203,10 @@ def calculate_division(close_time, asset, raw_db):
         db = db[columns_to_keep]
         db_data = pd.read_csv(DATA_NAME)
         db_data['date'] = pd.to_datetime(db_data['date']).dt.strftime('%Y-%m-%d')
-        close_block = datetime_to_blocks(close_time, db)
         max_block_db = db['block'].max()
-        if max_block_db < close_block:
-            additional_data = db_data[(db_data['block'] > max_block_db) & (db_data['block'] <= close_block)]
+        max_block_db_data = db_data['block'].max()
+        if max_block_db < max_block_db_data:
+            additional_data = db_data[(db_data['block'] > max_block_db) & (db_data['block'] <= max_block_db_data)]
             db = pd.concat([db, additional_data], ignore_index=True)
         #calculate remove subnet
         remove_subnet = calculate_remove_subnet(db, close_time)
