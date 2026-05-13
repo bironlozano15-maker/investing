@@ -9,7 +9,7 @@ def datetime_to_blocks(time, db):
     db['date'] = pd.to_datetime(db['date'], format='%Y-%m-%d', errors='coerce')
     db = db.dropna(subset=['date'])
     yesterday = pd.Timestamp(time.date() - timedelta(days=1))
-    filtered = db[(db['date'].dt.date == yesterday.date()) & (db['netuid'] == 0)]
+    filtered = db[(db['date'].dt.date == yesterday.date()) & (db['netuid'] == 1)]
     base_block = filtered['block'].iat[-1]
     delta_time = (time - base_time).total_seconds()
     block = base_block + delta_time / 12
